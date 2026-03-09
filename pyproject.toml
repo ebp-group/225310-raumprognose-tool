@@ -8,6 +8,8 @@ dependencies = [
     "duckdb",
     "streamlit",
     "pandas",
+    "openpyxl",
+    "plotly",
 ]
 
 [project.optional-dependencies]
