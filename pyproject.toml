@@ -1,0 +1,26 @@
+[project]
+name = "raumprognose-tool"
+version = "0.1.0"
+description = "Raumprognose Tool – ETL pipeline with dbt + DuckDB and Streamlit UI"
+requires-python = ">=3.10"
+dependencies = [
+    "dbt-duckdb",
+    "duckdb",
+    "streamlit",
+    "pandas",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "pre-commit",
+    "ruff",
+    "pytest",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 88

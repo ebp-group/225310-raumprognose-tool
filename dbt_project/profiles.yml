@@ -1,0 +1,7 @@
+raumprognose:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ../data/raumprognose.duckdb
+      threads: 4
