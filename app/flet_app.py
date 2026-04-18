@@ -47,7 +47,7 @@ def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     return ft.DataTable(
         columns=columns,
         rows=rows,
-        border=ft.border.all(1, ft.Colors.GREY_300),
+        border=ft.Border.all(1, ft.Colors.GREY_300),
         heading_row_color=ft.Colors.BLUE_GREY_50,
         horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
     )
@@ -71,7 +71,7 @@ def _metric_card(label: str, value: str, is_surplus: bool) -> ft.Card:
                 spacing=4,
             ),
             padding=16,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
         ),
         elevation=2,
     )
@@ -298,13 +298,13 @@ def main(page: ft.Page) -> None:
         page.update()
 
     pick_gebaeude = ft.FilePicker(
-        on_result=lambda e: _on_file_picked("gebaeude", gebaeude_label, e)
+        on_upload=lambda e: _on_file_picked("gebaeude", gebaeude_label, e)
     )
     pick_studierende = ft.FilePicker(
-        on_result=lambda e: _on_file_picked("studierende", studierende_label, e)
+        on_upload=lambda e: _on_file_picked("studierende", studierende_label, e)
     )
     pick_faktoren = ft.FilePicker(
-        on_result=lambda e: _on_file_picked("faktoren", faktoren_label, e)
+        on_upload=lambda e: _on_file_picked("faktoren", faktoren_label, e)
     )
 
     # Export file pickers
@@ -334,9 +334,9 @@ def main(page: ft.Page) -> None:
             page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {e.path}")))
             page.update()
 
-    save_excel = ft.FilePicker(on_result=_on_excel_save)
-    save_students_png = ft.FilePicker(on_result=_on_students_png_save)
-    save_demand_png = ft.FilePicker(on_result=_on_demand_png_save)
+    save_excel = ft.FilePicker(on_upload=_on_excel_save)
+    save_students_png = ft.FilePicker(on_upload=_on_students_png_save)
+    save_demand_png = ft.FilePicker(on_upload=_on_demand_png_save)
 
     page.overlay.extend(
         [
@@ -369,7 +369,7 @@ def main(page: ft.Page) -> None:
         label="Szenario wählen",
         options=_scenario_options(),
         value=state["scenario"],
-        on_change=_on_scenario_changed,
+        on_select=_on_scenario_changed,
         width=220,
     )
 
@@ -511,7 +511,7 @@ def main(page: ft.Page) -> None:
         pivot_table = ft.DataTable(
             columns=pivot_columns,
             rows=pivot_rows,
-            border=ft.border.all(1, ft.Colors.GREY_300),
+            border=ft.Border.all(1, ft.Colors.GREY_300),
             heading_row_color=ft.Colors.BLUE_GREY_50,
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
@@ -568,7 +568,7 @@ def main(page: ft.Page) -> None:
 
         sd_chart_controls = [
             ft.Container(
-                content=ft.Image(src_base64=_fig_to_base64(fig)),
+                content=ft.Image(src=_fig_to_base64(fig)),
                 expand=True,
             )
             for fig in sd_figs
@@ -582,8 +582,8 @@ def main(page: ft.Page) -> None:
                     weight=ft.FontWeight.BOLD,
                 ),
                 ft.Container(
-                    content=ft.Image(src_base64=_fig_to_base64(fig_students)),
-                    alignment=ft.alignment.center,
+                    content=ft.Image(src=_fig_to_base64(fig_students)),
+                    alignment=ft.Alignment.CENTER,
                 ),
                 ft.Divider(),
                 ft.Text(
@@ -592,8 +592,8 @@ def main(page: ft.Page) -> None:
                     weight=ft.FontWeight.BOLD,
                 ),
                 ft.Container(
-                    content=ft.Image(src_base64=_fig_to_base64(fig_demand)),
-                    alignment=ft.alignment.center,
+                    content=ft.Image(src=_fig_to_base64(fig_demand)),
+                    alignment=ft.Alignment.CENTER,
                 ),
                 ft.Divider(),
                 ft.Text(
@@ -618,7 +618,7 @@ def main(page: ft.Page) -> None:
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
-                ft.ElevatedButton(
+                ft.Button(
                     "📥 Ergebnisse als Excel speichern",
                     on_click=lambda _: save_excel.save_file(
                         file_name=f"raumprognose_{state['scenario']}.xlsx",
@@ -633,7 +633,7 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Row(
                     [
-                        ft.ElevatedButton(
+                        ft.Button(
                             "📥 Studierendenzahlen (PNG)",
                             on_click=lambda _: save_students_png.save_file(
                                 file_name="studierende.png",
@@ -641,7 +641,7 @@ def main(page: ft.Page) -> None:
                             ),
                             icon=ft.Icons.IMAGE,
                         ),
-                        ft.ElevatedButton(
+                        ft.Button(
                             "📥 Flächenbedarf (PNG)",
                             on_click=lambda _: save_demand_png.save_file(
                                 file_name=f"flaechenbedarf_{state['scenario']}.png",
@@ -657,26 +657,33 @@ def main(page: ft.Page) -> None:
         )
 
         # ── Assemble tabs ────────────────────────────────────────────────
+        
         content_area.content = ft.Tabs(
-            tabs=[
-                ft.Tab(
-                    text="📋 Übersicht",
-                    content=ft.Container(content=tab1, padding=20),
-                ),
-                ft.Tab(
-                    text="📊 Ergebnisse",
-                    content=ft.Container(content=tab2, padding=20),
-                ),
-                ft.Tab(
-                    text="📈 Diagramme",
-                    content=ft.Container(content=tab3, padding=20),
-                ),
-                ft.Tab(
-                    text="⬇️ Export",
-                    content=ft.Container(content=tab4, padding=20),
-                ),
-            ],
+            selected_index=0,
+            length=4,
             expand=True,
+            content=ft.Column(
+                expand=True,
+                controls=[
+                    ft.TabBar(
+                        tabs=[
+                            ft.Tab(label=ft.Text("📋 Übersicht")),
+                            ft.Tab(label=ft.Text("📊 Ergebnisse")),
+                            ft.Tab(label=ft.Text("📈 Diagramme")),
+                            ft.Tab(label=ft.Text("⬇️ Export")),
+                        ]
+                    ),
+                    ft.TabBarView(
+                        expand=True,<
+                        controls=[
+                            ft.Container(content=tab1, padding=20),
+                            ft.Container(content=tab2, padding=20),
+                            ft.Container(content=tab3, padding=20),
+                            ft.Container(content=tab4, padding=20),
+                        ],
+                    ),
+                ]
+            )
         )
 
     # ── Sidebar ───────────────────────────────────────────────────────────
@@ -698,7 +705,7 @@ def main(page: ft.Page) -> None:
                     weight=ft.FontWeight.BOLD,
                     size=14,
                 ),
-                ft.ElevatedButton(
+                ft.Button(
                     "Gebäude & Räume",
                     on_click=lambda _: pick_gebaeude.pick_files(
                         allowed_extensions=["xlsx"],
@@ -708,7 +715,7 @@ def main(page: ft.Page) -> None:
                     width=220,
                 ),
                 gebaeude_label,
-                ft.ElevatedButton(
+                ft.Button(
                     "Studierende",
                     on_click=lambda _: pick_studierende.pick_files(
                         allowed_extensions=["xlsx"],
@@ -718,7 +725,7 @@ def main(page: ft.Page) -> None:
                     width=220,
                 ),
                 studierende_label,
-                ft.ElevatedButton(
+                ft.Button(
                     "Nutzungsfaktoren",
                     on_click=lambda _: pick_faktoren.pick_files(
                         allowed_extensions=["xlsx"],
@@ -735,7 +742,7 @@ def main(page: ft.Page) -> None:
         width=280,
         padding=20,
         bgcolor=ft.Colors.GREY_50,
-        border=ft.border.only(right=ft.BorderSide(1, ft.Colors.GREY_300)),
+        border=ft.Border.only(right=ft.BorderSide(1, ft.Colors.GREY_300)),
     )
 
     # ── Initial data load & render ────────────────────────────────────────
@@ -754,4 +761,4 @@ def main(page: ft.Page) -> None:
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.run(main)

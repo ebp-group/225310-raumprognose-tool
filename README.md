@@ -50,14 +50,15 @@ backed by a **dbt + DuckDB** ETL pipeline.
 ### 1. Create and activate a virtual environment
 
 ```bash
-python -m venv .venv
+uv venv
+uv sync
 source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 ```
 
 ### 2. Install dependencies
 
 ```bash
-pip install -e ".[dev]"
+uv sync
 ```
 
 ### 3. Install pre-commit hooks
@@ -71,7 +72,7 @@ pre-commit install
 Run the generation script once to create the three Excel input files under `data/`:
 
 ```bash
-python scripts/generate_sample_data.py
+uv run scripts/generate_sample_data.py
 ```
 
 This creates:
@@ -82,13 +83,13 @@ This creates:
 ## Launching the Desktop Application
 
 ```bash
-python app/flet_app.py
+uv run app/flet_app.py
 ```
 
 Or using the Flet CLI:
 
 ```bash
-flet run app/flet_app.py
+uv run flet run app/flet_app.py
 ```
 
 The application opens as a native desktop window with four tabs:
@@ -114,13 +115,13 @@ dbt run
 Or use the orchestration script from the project root:
 
 ```bash
-python scripts/run_pipeline.py
+uv run scripts/run_pipeline.py
 ```
 
 To run the pipeline and then launch the desktop UI:
 
 ```bash
-python scripts/run_pipeline.py --launch-ui
+uv run scripts/run_pipeline.py --launch-ui
 ```
 
 ## Development
