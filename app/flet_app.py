@@ -270,25 +270,35 @@ def main(page: ft.Page) -> None:
         df_sd = surplus_deficit(df_current, df_demand)
         return df_current, df_demand, df_sd
 
-    # ── File pickers ──────────────────────────────────────────────────────
+    # ── File picker ──────────────────────────────────────────────────────
 
     gebaeude_label = ft.Text("Standard", size=12, italic=True)
     studierende_label = ft.Text("Standard", size=12, italic=True)
     faktoren_label = ft.Text("Standard", size=12, italic=True)
 
-    def _on_file_picked(key: str, label: ft.Text, e: ft.FilePickerResultEvent):
-        """Handle a file-picker result for one of the three input datasets.
+    file_picker = ft.FilePicker()
+    page.overlay.append(file_picker)
+
+    async def _pick_file(key: str, label: ft.Text):
+        """Open a file-picker dialog for one of the three input datasets.
+
+        The picked file path is stored in ``state["custom_{key}"]`` and
+        the sidebar label is updated accordingly.
 
         Args:
             key: State key suffix – one of ``"gebaeude"``, ``"studierende"``,
                 or ``"faktoren"``.
             label: The sidebar :class:`ft.Text` label to update with the
                 chosen file name.
-            e: The :class:`ft.FilePickerResultEvent` from the picker.
         """
-        if e.files:
-            state[f"custom_{key}"] = e.files[0].path
-            label.value = Path(e.files[0].path).name
+        files = await file_picker.pick_files(
+            allowed_extensions=["xlsx"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+            dialog_title=f"{key.capitalize()} (.xlsx)",
+        )
+        if files:
+            state[f"custom_{key}"] = files[0].path
+            label.value = Path(files[0].path).name
         else:
             state[f"custom_{key}"] = None
             label.value = "Standard"
@@ -297,57 +307,47 @@ def main(page: ft.Page) -> None:
         rebuild_content()
         page.update()
 
-    pick_gebaeude = ft.FilePicker(
-        on_upload=lambda e: _on_file_picked("gebaeude", gebaeude_label, e)
-    )
-    pick_studierende = ft.FilePicker(
-        on_upload=lambda e: _on_file_picked("studierende", studierende_label, e)
-    )
-    pick_faktoren = ft.FilePicker(
-        on_upload=lambda e: _on_file_picked("faktoren", faktoren_label, e)
-    )
-
-    # Export file pickers
-    def _on_excel_save(e: ft.FilePickerResultEvent):
-        if e.path:
-            _, df_demand, df_sd = get_results()
-            excel_bytes = _build_excel(df_sd, state["df_studierende"], df_demand)
-            with open(e.path, "wb") as f:
+    # Export handlers
+    async def _save_excel(_e):
+        _, df_demand, df_sd = get_results()
+        excel_bytes = _build_excel(df_sd, state["df_studierende"], df_demand)
+        path = await file_picker.save_file(
+            file_name=f"raumprognose_{state['scenario']}.xlsx",
+            allowed_extensions=["xlsx"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            with open(path, "wb") as f:
                 f.write(excel_bytes)
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {e.path}")))
+            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
 
-    def _on_students_png_save(e: ft.FilePickerResultEvent):
-        if e.path:
-            fig = _create_students_chart(state["df_studierende"])
-            fig.savefig(e.path, format="png", dpi=150, bbox_inches="tight")
-            plt.close(fig)
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {e.path}")))
+    async def _save_students_png(_e):
+        fig = _create_students_chart(state["df_studierende"])
+        path = await file_picker.save_file(
+            file_name="studierende.png",
+            allowed_extensions=["png"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
+            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
+        plt.close(fig)
 
-    def _on_demand_png_save(e: ft.FilePickerResultEvent):
-        if e.path:
-            _, df_demand, _ = get_results()
-            fig = _create_demand_chart(df_demand, state["scenario"])
-            fig.savefig(e.path, format="png", dpi=150, bbox_inches="tight")
-            plt.close(fig)
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {e.path}")))
+    async def _save_demand_png(_e):
+        _, df_demand, _ = get_results()
+        fig = _create_demand_chart(df_demand, state["scenario"])
+        path = await file_picker.save_file(
+            file_name=f"flaechenbedarf_{state['scenario']}.png",
+            allowed_extensions=["png"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
+            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
-
-    save_excel = ft.FilePicker(on_upload=_on_excel_save)
-    save_students_png = ft.FilePicker(on_upload=_on_students_png_save)
-    save_demand_png = ft.FilePicker(on_upload=_on_demand_png_save)
-
-    page.overlay.extend(
-        [
-            pick_gebaeude,
-            pick_studierende,
-            pick_faktoren,
-            save_excel,
-            save_students_png,
-            save_demand_png,
-        ]
-    )
+        plt.close(fig)
 
     # ── Scenario dropdown ─────────────────────────────────────────────────
 
@@ -620,10 +620,7 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Button(
                     "📥 Ergebnisse als Excel speichern",
-                    on_click=lambda _: save_excel.save_file(
-                        file_name=f"raumprognose_{state['scenario']}.xlsx",
-                        allowed_extensions=["xlsx"],
-                    ),
+                    on_click=_save_excel,
                     icon=ft.Icons.SAVE,
                 ),
                 ft.Divider(),
@@ -635,18 +632,12 @@ def main(page: ft.Page) -> None:
                     [
                         ft.Button(
                             "📥 Studierendenzahlen (PNG)",
-                            on_click=lambda _: save_students_png.save_file(
-                                file_name="studierende.png",
-                                allowed_extensions=["png"],
-                            ),
+                            on_click=_save_students_png,
                             icon=ft.Icons.IMAGE,
                         ),
                         ft.Button(
                             "📥 Flächenbedarf (PNG)",
-                            on_click=lambda _: save_demand_png.save_file(
-                                file_name=f"flaechenbedarf_{state['scenario']}.png",
-                                allowed_extensions=["png"],
-                            ),
+                            on_click=_save_demand_png,
                             icon=ft.Icons.IMAGE,
                         ),
                     ],
@@ -674,7 +665,7 @@ def main(page: ft.Page) -> None:
                         ]
                     ),
                     ft.TabBarView(
-                        expand=True,<
+                        expand=True,
                         controls=[
                             ft.Container(content=tab1, padding=20),
                             ft.Container(content=tab2, padding=20),
@@ -707,30 +698,21 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Button(
                     "Gebäude & Räume",
-                    on_click=lambda _: pick_gebaeude.pick_files(
-                        allowed_extensions=["xlsx"],
-                        dialog_title="Gebäude & Räume (.xlsx)",
-                    ),
+                    on_click=lambda _: _pick_file("gebaeude", gebaeude_label),
                     icon=ft.Icons.UPLOAD_FILE,
                     width=220,
                 ),
                 gebaeude_label,
                 ft.Button(
                     "Studierende",
-                    on_click=lambda _: pick_studierende.pick_files(
-                        allowed_extensions=["xlsx"],
-                        dialog_title="Studierende (.xlsx)",
-                    ),
+                    on_click=lambda _: _pick_file("studierende", studierende_label),
                     icon=ft.Icons.UPLOAD_FILE,
                     width=220,
                 ),
                 studierende_label,
                 ft.Button(
                     "Nutzungsfaktoren",
-                    on_click=lambda _: pick_faktoren.pick_files(
-                        allowed_extensions=["xlsx"],
-                        dialog_title="Nutzungsfaktoren (.xlsx)",
-                    ),
+                    on_click=lambda _: _pick_file("faktoren", faktoren_label),
                     icon=ft.Icons.UPLOAD_FILE,
                     width=220,
                 ),
