@@ -2,9 +2,6 @@
 
 Each public function loads one of the three Excel input files, validates
 that the expected columns are present, and returns a :class:`pandas.DataFrame`.
-
-Functions decorated with ``@st.cache_data`` are safe to call repeatedly from
-Streamlit without re-reading the file on every widget interaction.
 """
 
 from __future__ import annotations
@@ -13,7 +10,6 @@ from pathlib import Path
 from typing import IO
 
 import pandas as pd
-import streamlit as st
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
 
@@ -42,7 +38,6 @@ def _validate_columns(df: pd.DataFrame, expected: set[str], source: str) -> None
         )
 
 
-@st.cache_data(show_spinner=False)
 def load_gebaeude_raeume(
     source: FileSource | None = None,
 ) -> pd.DataFrame:
@@ -65,7 +60,6 @@ def load_gebaeude_raeume(
     return df
 
 
-@st.cache_data(show_spinner=False)
 def load_studierende(
     source: FileSource | None = None,
 ) -> pd.DataFrame:
@@ -87,7 +81,6 @@ def load_studierende(
     return df.sort_values("jahr").reset_index(drop=True)
 
 
-@st.cache_data(show_spinner=False)
 def load_nutzungsfaktoren(
     source: FileSource | None = None,
 ) -> pd.DataFrame:

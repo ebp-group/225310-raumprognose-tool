@@ -1,6 +1,6 @@
 # Raumprognose Tool
 
-A **Streamlit** dashboard for spatial prognosis analysis of university/campus buildings,
+A **Flet** desktop application for spatial prognosis analysis of university/campus buildings,
 backed by a **dbt + DuckDB** ETL pipeline.
 
 ## Tech Stack
@@ -8,7 +8,7 @@ backed by a **dbt + DuckDB** ETL pipeline.
 | Layer | Technology |
 |-------|-----------|
 | ETL / Transformations | [dbt](https://docs.getdbt.com/) + [DuckDB](https://duckdb.org/) |
-| UI / Dashboard | [Streamlit](https://streamlit.io/) + [Plotly](https://plotly.com/python/) |
+| UI / Dashboard | [Flet](https://flet.dev/) (desktop) + [matplotlib](https://matplotlib.org/) |
 | Data / Excel I/O | [pandas](https://pandas.pydata.org/) + [openpyxl](https://openpyxl.readthedocs.io/) |
 | Language | Python ≥ 3.10 |
 | Code Quality | [black](https://black.readthedocs.io/), [ruff](https://docs.astral.sh/ruff/), [pre-commit](https://pre-commit.com/) |
@@ -26,7 +26,7 @@ backed by a **dbt + DuckDB** ETL pipeline.
 │   ├── studierende.xlsx             # Student numbers (historical + forecast)
 │   └── nutzungsfaktoren.xlsx        # Area factors per student per scenario
 ├── app/
-│   ├── streamlit_app.py             # Main Streamlit dashboard
+│   ├── flet_app.py                  # Main Flet desktop application
 │   ├── data_loader.py               # Excel file loading + validation
 │   ├── calculations.py              # Area calculations (demand, surplus/deficit)
 │   └── utils.py                     # DuckDB connection helper
@@ -79,22 +79,28 @@ This creates:
 - `data/studierende.xlsx` – Student numbers for 2024, 2030, 2040, 2050
 - `data/nutzungsfaktoren.xlsx` – Area factors per student per scenario (Basis / Wachstum / Digital)
 
-## Launching the Streamlit Dashboard
+## Launching the Desktop Application
 
 ```bash
-streamlit run app/streamlit_app.py
+python app/flet_app.py
 ```
 
-The dashboard provides four tabs:
+Or using the Flet CLI:
+
+```bash
+flet run app/flet_app.py
+```
+
+The application opens as a native desktop window with four tabs:
 
 | Tab | Content |
 |-----|---------|
 | **Übersicht** | Raw input tables (buildings, students, usage factors) |
 | **Ergebnisse** | Surplus/deficit table with green/red colour coding and summary metrics |
 | **Diagramme** | Line chart (students), grouped bar chart (demand), bar charts (surplus/deficit) |
-| **Export** | Download results as a styled Excel file or charts as PNG images |
+| **Export** | Save results as a styled Excel file or charts as PNG images |
 
-Custom Excel files can also be uploaded directly in the sidebar to replace the defaults.
+Custom Excel files can be loaded via the sidebar file picker buttons.
 
 ## Running the ETL Pipeline
 
@@ -109,6 +115,12 @@ Or use the orchestration script from the project root:
 
 ```bash
 python scripts/run_pipeline.py
+```
+
+To run the pipeline and then launch the desktop UI:
+
+```bash
+python scripts/run_pipeline.py --launch-ui
 ```
 
 ## Development

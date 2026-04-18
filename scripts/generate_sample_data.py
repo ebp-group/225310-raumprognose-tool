@@ -1,7 +1,7 @@
 """Generate sample Excel files for the Raumprognose Tool.
 
 Run this script once to create the three input Excel files used by the
-Streamlit dashboard:
+desktop application:
 
     python scripts/generate_sample_data.py
 
