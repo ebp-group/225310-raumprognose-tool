@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import flet as ft
+import flet_datatable2 as fdt
 import matplotlib
 
 matplotlib.use("Agg")  # noqa: E402 – must be set before importing pyplot
@@ -37,14 +38,14 @@ from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studie
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     """Convert a pandas DataFrame to a Flet DataTable widget."""
     columns = [
-        ft.DataColumn(ft.Text(str(col), weight=ft.FontWeight.BOLD))
+        fdt.DataColumn2(label=ft.Text(str(col), weight=ft.FontWeight.BOLD))
         for col in df.columns
     ]
     rows = []
     for _, row in df.head(max_rows).iterrows():
         cells = [ft.DataCell(ft.Text(str(val))) for val in row]
-        rows.append(ft.DataRow(cells=cells))
-    return ft.DataTable(
+        rows.append(fdt.DataRow2(cells=cells))
+    return fdt.DataTable2(
         columns=columns,
         rows=rows,
         border=ft.Border.all(1, ft.Colors.GREY_300),
@@ -253,7 +254,7 @@ def main(page: ft.Page) -> None:
             state["df_faktoren"] = load_nutzungsfaktoren(state["custom_faktoren"])
             return True
         except Exception as exc:
-            page.open(
+            page.show_dialog(
                 ft.SnackBar(
                     content=ft.Text(f"Fehler beim Laden der Daten: {exc}"),
                     bgcolor=ft.Colors.RED_400,
@@ -319,7 +320,7 @@ def main(page: ft.Page) -> None:
         if path:
             with open(path, "wb") as f:
                 f.write(excel_bytes)
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
 
     async def _save_students_png(_e):
@@ -331,7 +332,7 @@ def main(page: ft.Page) -> None:
         )
         if path:
             fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
 
@@ -345,7 +346,7 @@ def main(page: ft.Page) -> None:
         )
         if path:
             fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
 

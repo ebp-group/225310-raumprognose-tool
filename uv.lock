@@ -692,6 +692,18 @@ wheels = [
 ]
 
 [[package]]
+name = "flet-datatable2"
+version = "0.84.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flet" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/a0/50d6d33c6c2d2309b22d02f4cba9e004a2a1b4bbcd7e2e2371275587a443/flet_datatable2-0.84.0.tar.gz", hash = "sha256:f01b628962a275d06550471482345f0d3c8968724e1805d14183713a782360d3", size = 14948, upload-time = "2026-04-01T19:24:29.441Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/91/1e30aead708b9b54536dad46a388f2da6ec875e4207439be18edcc7081fd/flet_datatable2-0.84.0-py3-none-any.whl", hash = "sha256:e854d94dd2f75387e3ffbbc5c4403483b9068f95260f167c25dd5e2fde7092e9", size = 17531, upload-time = "2026-04-01T19:24:30.501Z" },
+]
+
+[[package]]
 name = "fonttools"
 version = "4.62.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2120,6 +2132,7 @@ dependencies = [
     { name = "dbt-duckdb" },
     { name = "duckdb" },
     { name = "flet" },
+    { name = "flet-datatable2" },
     { name = "matplotlib" },
     { name = "openpyxl" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -2140,6 +2153,7 @@ requires-dist = [
     { name = "dbt-duckdb" },
     { name = "duckdb" },
     { name = "flet" },
+    { name = "flet-datatable2", specifier = ">=0.84.0" },
     { name = "matplotlib" },
     { name = "openpyxl" },
     { name = "pandas" },
