@@ -331,11 +331,9 @@ def main(page: ft.Page) -> None:
         )
         if path:
             fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
-            plt.close(fig)
             page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
-        else:
-            plt.close(fig)
+        plt.close(fig)
 
     async def _save_demand_png(_e):
         _, df_demand, _ = get_results()
@@ -347,11 +345,9 @@ def main(page: ft.Page) -> None:
         )
         if path:
             fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
-            plt.close(fig)
             page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
-        else:
-            plt.close(fig)
+        plt.close(fig)
 
     # ── Scenario dropdown ─────────────────────────────────────────────────
 
