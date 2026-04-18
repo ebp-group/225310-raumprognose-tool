@@ -4,6 +4,8 @@ Run with:
     flet run app/flet_app.py
     Or directly:
     python app/flet_app.py
+
+Assets (splash screen, icon) are served from the ``app/assets/`` directory.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ import base64
 import io
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -232,6 +235,29 @@ def main(page: ft.Page) -> None:
     page.window.height = 900
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
+
+    # ── Splash screen overlay ─────────────────────────────────────────────
+
+    splash_image = ft.Image(src="splash.png", fit=ft.ImageFit.CONTAIN)
+    splash_overlay = ft.Container(
+        content=splash_image,
+        alignment=ft.Alignment.CENTER,
+        bgcolor=ft.Colors.WHITE,
+        expand=True,
+    )
+    page.overlay.append(splash_overlay)
+    page.update()
+
+    def _dismiss_splash() -> None:
+        """Remove the splash screen after a short delay."""
+        import time
+
+        time.sleep(2)
+        if splash_overlay in page.overlay:
+            page.overlay.remove(splash_overlay)
+            page.update()
+
+    threading.Thread(target=_dismiss_splash, daemon=True).start()
 
     # ── Mutable application state ─────────────────────────────────────────
     state: dict[str, Any] = {
@@ -741,4 +767,4 @@ def main(page: ft.Page) -> None:
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    ft.run(main, assets_dir="assets")

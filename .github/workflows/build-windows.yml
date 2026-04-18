@@ -35,7 +35,7 @@ jobs:
         run: uv pip install pyinstaller
 
       - name: Build Windows executable
-        run: uv run flet pack app/flet_app.py --name RaumprognoseTool
+        run: uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico --splash app/assets/splash.png
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
