@@ -1,4 +1,4 @@
-"""Orchestration script to run the dbt ETL pipeline and optionally launch Streamlit."""
+"""Orchestration script to run the dbt ETL pipeline and optionally launch the UI."""
 
 import argparse
 import subprocess
@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 DBT_PROJECT_DIR = Path(__file__).parent.parent / "dbt_project"
-APP_ENTRY_POINT = Path(__file__).parent.parent / "app" / "streamlit_app.py"
+APP_ENTRY_POINT = Path(__file__).parent.parent / "app" / "flet_app.py"
 
 
 def run_dbt() -> int:
@@ -28,11 +28,11 @@ def run_dbt() -> int:
     return result.returncode
 
 
-def launch_streamlit() -> None:
-    """Launch the Streamlit application."""
-    print("Launching Streamlit app...")
+def launch_app() -> None:
+    """Launch the Flet desktop application."""
+    print("Launching Flet app...")
     subprocess.run(
-        ["streamlit", "run", str(APP_ENTRY_POINT)],
+        [sys.executable, str(APP_ENTRY_POINT)],
         check=False,
     )
 
@@ -49,7 +49,7 @@ def main() -> None:
     parser.add_argument(
         "--launch-ui",
         action="store_true",
-        help="Launch the Streamlit UI after the ETL pipeline.",
+        help="Launch the Flet desktop UI after the ETL pipeline.",
     )
     args = parser.parse_args()
 
@@ -59,7 +59,7 @@ def main() -> None:
             sys.exit(rc)
 
     if args.launch_ui:
-        launch_streamlit()
+        launch_app()
 
 
 if __name__ == "__main__":

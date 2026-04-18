@@ -1,6 +1,6 @@
 """Calculation functions for the Raumprognose Tool.
 
-All functions are pure (no side-effects, no Streamlit calls) and work
+All functions are pure (no side-effects, no UI calls) and work
 exclusively with :class:`pandas.DataFrame` objects so they can be tested
 independently of the UI layer.
 """
