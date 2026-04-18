@@ -253,7 +253,7 @@ def main(page: ft.Page) -> None:
             state["df_faktoren"] = load_nutzungsfaktoren(state["custom_faktoren"])
             return True
         except Exception as exc:
-            page.open(
+            page.show_dialog(
                 ft.SnackBar(
                     content=ft.Text(f"Fehler beim Laden der Daten: {exc}"),
                     bgcolor=ft.Colors.RED_400,
@@ -277,7 +277,6 @@ def main(page: ft.Page) -> None:
     faktoren_label = ft.Text("Standard", size=12, italic=True)
 
     file_picker = ft.FilePicker()
-    page.overlay.append(file_picker)
 
     async def _pick_file(key: str, label: ft.Text):
         """Open a file-picker dialog for one of the three input datasets.
@@ -319,7 +318,7 @@ def main(page: ft.Page) -> None:
         if path:
             with open(path, "wb") as f:
                 f.write(excel_bytes)
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
 
     async def _save_students_png(_e):
@@ -331,7 +330,7 @@ def main(page: ft.Page) -> None:
         )
         if path:
             fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
 
@@ -345,7 +344,7 @@ def main(page: ft.Page) -> None:
         )
         if path:
             fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
-            page.open(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
 
@@ -648,7 +647,7 @@ def main(page: ft.Page) -> None:
         )
 
         # ── Assemble tabs ────────────────────────────────────────────────
-        
+
         content_area.content = ft.Tabs(
             selected_index=0,
             length=4,
@@ -673,8 +672,8 @@ def main(page: ft.Page) -> None:
                             ft.Container(content=tab4, padding=20),
                         ],
                     ),
-                ]
-            )
+                ],
+            ),
         )
 
     # ── Sidebar ───────────────────────────────────────────────────────────
