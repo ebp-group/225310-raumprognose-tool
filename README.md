@@ -51,7 +51,7 @@ backed by a **dbt + DuckDB** ETL pipeline.
 
 ```bash
 uv venv
-uv sync
+uv sync --all-extras
 source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 ```
 
@@ -59,6 +59,7 @@ source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 
 ```bash
 uv sync
+uv pip install -e .
 ```
 
 ### 3. Install pre-commit hooks
@@ -122,6 +123,13 @@ To run the pipeline and then launch the desktop UI:
 
 ```bash
 uv run scripts/run_pipeline.py --launch-ui
+```
+
+There is even a shorthand for this:
+
+```bash
+run_pipeline              # only run dbt 
+run_pipeline --launch-ui  # run dbt AND launch the UI after
 ```
 
 ## Development

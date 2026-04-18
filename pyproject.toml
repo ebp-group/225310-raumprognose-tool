@@ -21,6 +21,13 @@ dev = [
     "pytest",
 ]
 
+[project.scripts]
+run_pipeline = "scripts.run_pipeline:main"
+
+[tool.setuptools]
+packages = ["app", "scripts"]
+py-modules = ["__init__"] # dash, not underscore
+
 [tool.black]
 line-length = 88
 target-version = ["py310"]
