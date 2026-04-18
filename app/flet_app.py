@@ -15,6 +15,7 @@ import io
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from calculations import current_area_by_nutzungsart, future_demand, surplus_deficit
 from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende
+
+SPLASH_DURATION_SECONDS = 2
 
 # ── UI helper functions ───────────────────────────────────────────────────────
 
@@ -250,9 +253,7 @@ def main(page: ft.Page) -> None:
 
     def _dismiss_splash() -> None:
         """Remove the splash screen after a short delay."""
-        import time
-
-        time.sleep(2)
+        time.sleep(SPLASH_DURATION_SECONDS)
         if splash_overlay in page.overlay:
             page.overlay.remove(splash_overlay)
             page.update()
