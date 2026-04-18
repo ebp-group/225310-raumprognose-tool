@@ -18,8 +18,8 @@ from typing import Any
 import flet as ft
 import matplotlib
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+matplotlib.use("Agg")  # noqa: E402 – must be set before importing pyplot
+import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -277,6 +277,15 @@ def main(page: ft.Page) -> None:
     faktoren_label = ft.Text("Standard", size=12, italic=True)
 
     def _on_file_picked(key: str, label: ft.Text, e: ft.FilePickerResultEvent):
+        """Handle a file-picker result for one of the three input datasets.
+
+        Args:
+            key: State key suffix – one of ``"gebaeude"``, ``"studierende"``,
+                or ``"faktoren"``.
+            label: The sidebar :class:`ft.Text` label to update with the
+                chosen file name.
+            e: The :class:`ft.FilePickerResultEvent` from the picker.
+        """
         if e.files:
             state[f"custom_{key}"] = e.files[0].path
             label.value = Path(e.files[0].path).name
@@ -343,6 +352,7 @@ def main(page: ft.Page) -> None:
     # ── Scenario dropdown ─────────────────────────────────────────────────
 
     def _scenario_options() -> list[ft.dropdown.Option]:
+        """Return dropdown options derived from the loaded factors DataFrame."""
         if state["df_faktoren"] is not None:
             return [
                 ft.dropdown.Option(s)
@@ -364,6 +374,11 @@ def main(page: ft.Page) -> None:
     )
 
     def _update_scenario_options():
+        """Sync the scenario dropdown with the currently loaded factors data.
+
+        If the previously selected scenario is no longer available after a
+        file change, the first available scenario is selected automatically.
+        """
         scenario_dropdown.options = _scenario_options()
         if state["df_faktoren"] is not None:
             available = state["df_faktoren"]["szenario"].unique().tolist()
