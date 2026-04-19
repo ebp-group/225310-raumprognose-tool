@@ -11,7 +11,7 @@ The tool supports two workflows:
 | Workflow | Description | Entry point |
 |----------|-------------|-------------|
 | **Interactive (Flet app)** | User picks Excel files → reviews data → triggers calculation → exports results. Uses pandas for calculations and (optionally) in-memory DuckDB for SQL queries. No dbt required. | `uv run app/flet_app.py` |
-| **Batch / CI** | Runs the dbt pipeline against canonical data files, materialises results into an on-disk DuckDB database. Suitable for automated/nightly reporting. | `uv run scripts/run_pipeline.py` |
+| **Batch / CI** | Runs the dbt pipeline against canonical data files, materializes results into an on-disk DuckDB database. Suitable for automated/nightly reporting. | `uv run scripts/run_pipeline.py` |
 
 ## Tech Stack
 

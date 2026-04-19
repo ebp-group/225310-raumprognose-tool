@@ -62,10 +62,23 @@ def load_dataframe(
     Args:
         conn: An open DuckDB connection.
         df: The DataFrame to load.
-        table_name: Name of the target table inside DuckDB.
+        table_name: Name of the target table inside DuckDB.  Must contain
+            only alphanumeric characters and underscores.
         replace: When ``True`` (default) an existing table with the same
             name is replaced; otherwise an error is raised.
+
+    Raises:
+        ValueError: If *table_name* contains characters other than
+            ``[a-zA-Z0-9_]``.
     """
+    import re
+
+    if not re.fullmatch(r"[a-zA-Z_]\w*", table_name):
+        raise ValueError(
+            f"Invalid table name {table_name!r}: "
+            "must start with a letter or underscore and contain only "
+            "alphanumeric characters and underscores."
+        )
     mode = "CREATE OR REPLACE" if replace else "CREATE"
     conn.execute(f"{mode} TABLE {table_name} AS SELECT * FROM df")
 
