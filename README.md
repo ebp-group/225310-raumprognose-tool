@@ -1,14 +1,25 @@
 # Raumprognose Tool
 
-A **Flet** desktop application for spatial prognosis analysis of university/campus buildings,
-backed by a **dbt + DuckDB** ETL pipeline.
+A **Flet** desktop application for spatial prognosis analysis of university/campus buildings.
+The interactive app uses **pandas** and an in-memory **DuckDB** engine for calculations.
+An optional **dbt + DuckDB** batch pipeline is available for CI / automated reporting.
+
+## Architecture
+
+The tool supports two workflows:
+
+| Workflow | Description | Entry point |
+|----------|-------------|-------------|
+| **Interactive (Flet app)** | User picks Excel files → reviews data → triggers calculation → exports results. Uses pandas for calculations and (optionally) in-memory DuckDB for SQL queries. No dbt required. | `uv run app/flet_app.py` |
+| **Batch / CI** | Runs the dbt pipeline against canonical data files, materialises results into an on-disk DuckDB database. Suitable for automated/nightly reporting. | `uv run scripts/run_pipeline.py` |
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| ETL / Transformations | [dbt](https://docs.getdbt.com/) + [DuckDB](https://duckdb.org/) |
 | UI / Dashboard | [Flet](https://flet.dev/) (desktop) + [matplotlib](https://matplotlib.org/) |
+| Calculations (interactive) | [pandas](https://pandas.pydata.org/) + [DuckDB](https://duckdb.org/) (in-memory) |
+| Batch ETL (optional) | [dbt](https://docs.getdbt.com/) + [DuckDB](https://duckdb.org/) (on-disk) |
 | Data / Excel I/O | [pandas](https://pandas.pydata.org/) + [openpyxl](https://openpyxl.readthedocs.io/) |
 | Language | Python ≥ 3.10 |
 | Code Quality | [black](https://black.readthedocs.io/), [ruff](https://docs.astral.sh/ruff/), [pre-commit](https://pre-commit.com/) |
@@ -29,7 +40,7 @@ backed by a **dbt + DuckDB** ETL pipeline.
 │   ├── flet_app.py                  # Main Flet desktop application
 │   ├── data_loader.py               # Excel file loading + validation
 │   ├── calculations.py              # Area calculations (demand, surplus/deficit)
-│   └── utils.py                     # DuckDB connection helper
+│   └── utils.py                     # DuckDB helpers (in-memory + on-disk)
 ├── dbt_project/
 │   ├── dbt_project.yml              # dbt project configuration
 │   ├── profiles.yml                 # DuckDB connection config
@@ -104,7 +115,11 @@ The application opens as a native desktop window with four tabs:
 
 Custom Excel files can be loaded via the sidebar file picker buttons.
 
-## Running the ETL Pipeline
+## Running the ETL Pipeline (Batch / CI mode)
+
+The dbt pipeline is **optional** — the Flet app works without it.  Use it
+when you want to materialise results into an on-disk DuckDB database from
+canonical data files.
 
 Run all dbt models from inside the `dbt_project/` directory:
 
@@ -125,11 +140,18 @@ To run the pipeline and then launch the desktop UI:
 uv run scripts/run_pipeline.py --launch-ui
 ```
 
+To skip dbt entirely and launch only the Flet app:
+
+```bash
+uv run scripts/run_pipeline.py --app-only
+```
+
 There is even a shorthand for this:
 
 ```bash
-run_pipeline              # only run dbt 
+run_pipeline              # only run dbt
 run_pipeline --launch-ui  # run dbt AND launch the UI after
+run_pipeline --app-only   # launch the UI without dbt
 ```
 
 ## Development
