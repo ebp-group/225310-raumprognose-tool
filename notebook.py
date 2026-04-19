@@ -25,7 +25,6 @@ def _():
     import sys
     from pathlib import Path
 
-    import duckdb
     import matplotlib.pyplot as plt
     import pandas as pd
 
@@ -45,24 +44,35 @@ def _():
         load_nutzungsfaktoren,
         load_studierende,
     )
+    from app.utils import get_in_memory_connection, load_dataframe, query_to_dataframe
 
     return (
         Path,
         current_area_by_nutzungsart,
-        duckdb,
         future_demand,
+        get_in_memory_connection,
+        load_dataframe,
         load_gebaeude_raeume,
         load_nutzungsfaktoren,
         load_studierende,
         pd,
         plt,
+        query_to_dataframe,
         surplus_deficit,
         wide_results,
     )
 
 
 @app.cell
-def _(Path, duckdb, load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende, mo):
+def _(
+    Path,
+    get_in_memory_connection,
+    load_dataframe,
+    load_gebaeude_raeume,
+    load_nutzungsfaktoren,
+    load_studierende,
+    mo,
+):
     mo.md("## 1 – Load Excel data into in-memory DuckDB")
 
     # Load the three Excel files via the existing data_loader module
@@ -70,11 +80,11 @@ def _(Path, duckdb, load_gebaeude_raeume, load_nutzungsfaktoren, load_studierend
     df_studierende = load_studierende()
     df_faktoren = load_nutzungsfaktoren()
 
-    # Store them in an in-memory DuckDB database
-    con = duckdb.connect(":memory:")
-    con.execute("CREATE TABLE gebaeude_raeume AS SELECT * FROM df_gebaeude")
-    con.execute("CREATE TABLE studierende AS SELECT * FROM df_studierende")
-    con.execute("CREATE TABLE nutzungsfaktoren AS SELECT * FROM df_faktoren")
+    # Store them in an in-memory DuckDB database using app.utils helpers
+    con = get_in_memory_connection()
+    load_dataframe(con, df_gebaeude, "gebaeude_raeume")
+    load_dataframe(con, df_studierende, "studierende")
+    load_dataframe(con, df_faktoren, "nutzungsfaktoren")
 
     _tables = con.execute("SHOW TABLES").fetchdf()
     mo.md(
@@ -87,12 +97,12 @@ def _(Path, duckdb, load_gebaeude_raeume, load_nutzungsfaktoren, load_studierend
 
 
 @app.cell
-def _(con, mo):
+def _(con, mo, query_to_dataframe):
     mo.md("### Raw data from DuckDB")
 
-    _gebaeude_tbl = con.execute("SELECT * FROM gebaeude_raeume").fetchdf()
-    _stud_tbl = con.execute("SELECT * FROM studierende").fetchdf()
-    _fakt_tbl = con.execute("SELECT * FROM nutzungsfaktoren").fetchdf()
+    _gebaeude_tbl = query_to_dataframe(con, "SELECT * FROM gebaeude_raeume")
+    _stud_tbl = query_to_dataframe(con, "SELECT * FROM studierende")
+    _fakt_tbl = query_to_dataframe(con, "SELECT * FROM nutzungsfaktoren")
 
     mo.ui.tabs(
         {
