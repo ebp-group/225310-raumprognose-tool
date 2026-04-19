@@ -30,7 +30,7 @@ def _():
     import pandas as pd
 
     # Ensure the app package is importable
-    _repo_root = Path("__file__").resolve().parent
+    _repo_root = Path(__file__).resolve().parent
     if str(_repo_root) not in sys.path:
         sys.path.insert(0, str(_repo_root))
 
@@ -241,7 +241,7 @@ def _(df_sd, mo, plt):
 def _(con, mo, scenario_selector):
     mo.md("### DuckDB-Abfrage: Gesamtübersicht")
 
-    _query = f"""
+    _query = """
     SELECT
         n.nutzungsart,
         s.jahr,
@@ -257,11 +257,11 @@ def _(con, mo, scenario_selector):
         FROM gebaeude_raeume
         GROUP BY nutzungsart
     ) g ON g.nutzungsart = n.nutzungsart
-    WHERE n.szenario = '{scenario_selector.value}'
+    WHERE n.szenario = $1
     ORDER BY n.nutzungsart, s.jahr
     """
 
-    _result = con.execute(_query).fetchdf()
+    _result = con.execute(_query, [scenario_selector.value]).fetchdf()
     mo.ui.table(_result)
     return
 
