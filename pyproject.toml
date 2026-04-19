@@ -11,6 +11,7 @@ dependencies = [
     "openpyxl",
     "matplotlib",
     "flet-datatable2>=0.84.0",
+    "marimo",
 ]
 
 [project.optional-dependencies]
