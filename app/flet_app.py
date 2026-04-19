@@ -40,6 +40,10 @@ SPLASH_DURATION_SECONDS = 2
 
 # ── UI helper functions ───────────────────────────────────────────────────────
 
+def get_assets_dir() -> Path:
+    default_assets_dir = Path(__file__).parent / "assets"   # fallback for local runs
+    return Path(os.environ.get("FLET_ASSETS_DIR", str(default_assets_dir))).resolve()
+
 
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     """Convert a pandas DataFrame to a Flet DataTable widget."""
