@@ -254,9 +254,8 @@ def main(page: ft.Page) -> None:
     def _dismiss_splash() -> None:
         """Remove the splash screen after a short delay."""
         time.sleep(SPLASH_DURATION_SECONDS)
-        if splash_overlay in page.overlay:
-            page.overlay.remove(splash_overlay)
-            page.update()
+        splash_overlay.visible = False
+        page.update()
 
     threading.Thread(target=_dismiss_splash, daemon=True).start()
 
