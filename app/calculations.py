@@ -52,7 +52,7 @@ def future_demand(
     """
     faktoren_sel = df_faktoren[df_faktoren["szenario"] == szenario].copy()
     cross = df_studierende.merge(faktoren_sel, how="cross")
-    cross["bedarf_m2"] = cross["anzahl_studierende"] * cross["faktor_m2_pro_student"]
+    cross["bedarf_m2"] = cross["anzahl_studierende"] * cross["faktor_m2_pro_person"]
     return (
         cross[["nutzungsart", "jahr", "bedarf_m2"]]
         .sort_values(["nutzungsart", "jahr"])
@@ -71,7 +71,7 @@ def surplus_deficit(
 
     Args:
         df_current: Output of :func:`current_area_by_nutzungsart` with columns
-            ``nutzungsart`` and ``flaeche_m2_gesamt``.
+            ``raumtyp_ebp`` and ``flaeche_m2``.
         df_demand: Output of :func:`future_demand` with columns ``nutzungsart``,
             ``jahr``, ``bedarf_m2``.
 
@@ -79,10 +79,10 @@ def surplus_deficit(
         DataFrame with columns ``nutzungsart``, ``jahr``, ``flaeche_m2_gesamt``,
         ``bedarf_m2``, ``differenz_m2`` (positive = surplus, negative = deficit).
     """
-    merged = df_demand.merge(df_current, on="nutzungsart", how="left")
-    merged["differenz_m2"] = merged["flaeche_m2_gesamt"] - merged["bedarf_m2"]
+    merged = df_demand.merge(df_current, left_on="nutzungsart", right_on="raumtyp_ebp", how="left")
+    merged["differenz_m2"] = merged["flaeche_m2"] - merged["bedarf_m2"]
     return merged[
-        ["nutzungsart", "jahr", "flaeche_m2_gesamt", "bedarf_m2", "differenz_m2"]
+        ["nutzungsart", "jahr", "flaeche_m2", "bedarf_m2", "differenz_m2"]
     ].reset_index(drop=True)
 
 

@@ -14,10 +14,9 @@ import base64
 import io
 import os
 import sys
-import threading
-import time
+import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 import logging
 
 import flet as ft
@@ -126,7 +125,9 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
 def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
     """Grouped bar chart of area demand by usage type and year."""
     fig, ax = plt.subplots(figsize=(10, 5))
-    years = sorted(df_demand["jahr"].unique())
+    #years = sorted(df_demand["jahr"].unique())
+    years = [2026, 2030, 2040, 2050]
+
     nutzungsarten = sorted(df_demand["nutzungsart"].unique())
     x = range(len(nutzungsarten))
     width = 0.8 / max(len(years), 1)
@@ -153,7 +154,8 @@ def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
 
 def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[plt.Figure]:
     """One bar chart per forecast year showing surplus/deficit by usage type."""
-    years = sorted(df_sd["jahr"].unique())
+    # years = sorted(df_sd["jahr"].unique())
+    years = [2026, 2030, 2040, 2050]
     figs: list[plt.Figure] = []
     for year in years:
         fig, ax = plt.subplots(figsize=(5, 4))
@@ -260,30 +262,37 @@ def main(page: ft.Page) -> None:
         opacity=1.0,
         animate_opacity=ft.Animation(SPLASH_FADE_OUT_MS, ft.AnimationCurve.EASE_OUT),
     )
-    #page.overlay.append(splash_overlay)
+    page.overlay.append(splash_overlay)
     page.update()
 
-    def _dismiss_splash() -> None:
+    async def dismiss_splash() -> None:
         """Fade out and remove the splash screen after a short delay."""
-        time.sleep(SPLASH_DURATION_SECONDS)
+        await asyncio.sleep(SPLASH_DURATION_SECONDS)
         splash_overlay.opacity = 0
+        splash_overlay.update
         page.update()
         # Wait for the fade-out animation to finish, then remove the overlay.
-        time.sleep(SPLASH_FADE_OUT_MS / 1000 + 0.1)
-        page.overlay.remove(splash_overlay)
-        page.update()
+        await asyncio.sleep(SPLASH_FADE_OUT_MS / 1000 + 0.1)
 
-    #threading.Thread(target=_dismiss_splash, daemon=True).start()
+        if splash_overlay in page.overlay:
+            page.overlay.remove(splash_overlay)
+            page.update()
+
+    page.run_task(dismiss_splash)
 
     # ── Mutable application state ─────────────────────────────────────────
+
+    # TODO: remove hardcoded paths and use file pickers instead
+    base_path = Path(r"C:\Users\ods\OneDrive - EBP\CH_P_225310 - PE_TPF_UniSG - General\40_BEARBEITUNG\04_Auswertung\02_Datenmodell")
+
     state: dict[str, Any] = {
         "df_gebaeude": None,
         "df_studierende": None,
         "df_faktoren": None,
         "scenario": "Basis",
-        "custom_gebaeude": None,
-        "custom_studierende": None,
-        "custom_faktoren": None,
+        "custom_gebaeude": (base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"),
+        "custom_studierende": (base_path / "prognose_studierende_und_ma.xlsx"),
+        "custom_faktoren": (base_path / "nutzungsfaktoren.xlsx"),
     }
 
     # ── Data loading ──────────────────────────────────────────────────────
@@ -318,7 +327,6 @@ def main(page: ft.Page) -> None:
             return False
 
     def get_results() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        # TODO Fix calculations
         """Return (current_area, demand, surplus_deficit) DataFrames."""
         df_current = current_area_by_nutzungsart(state["df_gebaeude"])
         df_demand = future_demand(
@@ -458,9 +466,14 @@ def main(page: ft.Page) -> None:
 
     def rebuild_content():
         """Rebuild all tab content from current state."""
+        log.debug("Rebuilding content with scenario: %s", state["scenario"])
+        log.debug("Factors data:\n%s", state["df_faktoren"])
+        log.debug("Student data:\n%s", state["df_studierende"])
+        log.debug("Building data:\n%s", state["df_gebaeude"])
         if any(
             state[k] is None for k in ("df_gebaeude", "df_studierende", "df_faktoren")
         ):
+            log.debug("Missing data, showing placeholder")
             content_area.content = ft.Container(
                 content=ft.Text(
                     "Bitte zuerst Daten laden.",
@@ -471,6 +484,7 @@ def main(page: ft.Page) -> None:
             )
             return
         
+        log.debug("Calculating results...")
         _, df_demand, df_sd = get_results()
         years = sorted(df_sd["jahr"].unique())
 
@@ -521,11 +535,6 @@ def main(page: ft.Page) -> None:
             scroll=ft.ScrollMode.AUTO,
             spacing=16,
         )
-
-         # TODO remove
-        page.update()
-        return
-
 
         # ── Tab 2: Ergebnisse ─────────────────────────────────────────────
         metric_cards = []
@@ -646,7 +655,7 @@ def main(page: ft.Page) -> None:
         ]
 
         tab3 = ft.Column(
-            [
+            controls=[
                 ft.Text(
                     "Studierendenzahlen im Zeitverlauf",
                     size=20,
@@ -672,7 +681,7 @@ def main(page: ft.Page) -> None:
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
-                ft.Row(sd_chart_controls, spacing=8, wrap=True),
+                ft.Row(cast(list[ft.Control], sd_chart_controls), spacing=8, wrap=True),
             ],
             scroll=ft.ScrollMode.AUTO,
             spacing=16,
@@ -790,9 +799,9 @@ def main(page: ft.Page) -> None:
                 faktoren_label,
                 ft.Divider(),
                 ft.Button(
-                    "Alle Dateien laden",
+                    "Szenario berechnen",
                     on_click=load_all_data,
-                    icon=ft.Icons.CHECK,
+                    icon=ft.Icons.CALCULATE,
                     width=220,
                 ),
             ],

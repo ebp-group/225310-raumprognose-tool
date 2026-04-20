@@ -19,6 +19,7 @@ _GEBAEUDE_COLS = {"Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "F
 _STUDIERENDE_COLS = {"jahr", "anzahl_studierende", "anzahl_forschung_monatslohn", "anzahl_services_monatslohn", "anzahl_forschung_studenlohn", "anzahl_services_stundenlohn"}
 _NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_person", "schritt"}
 
+
 FileSource = str | Path | IO[bytes]
 
 
@@ -56,26 +57,18 @@ def load_gebaeude_raeume(
     Raises:
         ValueError: If required columns are missing.
     """
-    #df = pd.read_excel(source, engine="openpyxl")
-    conn = get_in_memory_connection()
-    sql = f"""SELECT
-    "Eigentumsform" as eigentumsform,
-    "Abgabeart" as abgabeart,
-    "Eigentümer" as eigentümer,
-    "Raumtyp EBP" as raumtyp_ebp,
-    "Fläche m²" as flaeche_m2,
-    "Betriebsaufnahme" as betriebsaufnahme,
-    "Betriebsende"
-    FROM read_xlsx(
-    '{source}',
-    range="A:S",
-    header=True,
-    all_varchar = true,
-    stop_at_empty = true)
-    """
-
-    df = query_to_dataframe(conn, sql)
+    df = pd.read_excel(source, engine="openpyxl")
     _validate_columns(df, _GEBAEUDE_COLS, os.path.basename(source))
+    df = df.rename(columns={
+        "Eigentumsform": "eigentumsform",
+        "Abgabeart": "abgabeart",
+        "Eigentümer": "eigentümer",
+        "Raumtyp EBP": "raumtyp_ebp",
+        "Fläche m²": "flaeche_m2",
+        "Betriebsaufnahme": "betriebsaufnahme",
+        "Betriebsende": "betriebsende"
+    })
+
     return df
 
 
