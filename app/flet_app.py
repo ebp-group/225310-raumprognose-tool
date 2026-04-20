@@ -245,7 +245,7 @@ def main(page: ft.Page) -> None:
 
     # ── Splash screen overlay ─────────────────────────────────────────────
 
-    splash_image = ft.Image(src="splash.png", fit=ft.ImageFit.CONTAIN)
+    splash_image = ft.Image(src="splash.png", fit=ft.BoxFit.CONTAIN)
     splash_overlay = ft.Container(
         content=splash_image,
         alignment=ft.Alignment.CENTER,
