@@ -26,6 +26,9 @@ dbt_project/dbt_packages/
 dbt_project/logs/
 logs/
 
+# Data
+data/
+
 # Ruff
 .ruff_cache/
 
