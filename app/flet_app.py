@@ -37,6 +37,7 @@ from calculations import current_area_by_nutzungsart, future_demand, surplus_def
 from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende
 
 SPLASH_DURATION_SECONDS = 2
+SPLASH_FADE_OUT_MS = 300
 
 # ── UI helper functions ───────────────────────────────────────────────────────
 
@@ -251,14 +252,20 @@ def main(page: ft.Page) -> None:
         alignment=ft.Alignment.CENTER,
         bgcolor=ft.Colors.WHITE,
         expand=True,
+        opacity=1.0,
+        animate_opacity=ft.Animation(SPLASH_FADE_OUT_MS, ft.AnimationCurve.EASE_OUT),
     )
     page.overlay.append(splash_overlay)
     page.update()
 
     def _dismiss_splash() -> None:
-        """Remove the splash screen after a short delay."""
+        """Fade out and remove the splash screen after a short delay."""
         time.sleep(SPLASH_DURATION_SECONDS)
-        splash_overlay.visible = False
+        splash_overlay.opacity = 0
+        page.update()
+        # Wait for the fade-out animation to finish, then remove the overlay.
+        time.sleep(SPLASH_FADE_OUT_MS / 1000 + 0.1)
+        page.overlay.remove(splash_overlay)
         page.update()
 
     threading.Thread(target=_dismiss_splash, daemon=True).start()
