@@ -22,10 +22,9 @@ def current_area_by_nutzungsart(df_gebaeude: pd.DataFrame) -> pd.DataFrame:
         sorted by ``nutzungsart``.
     """
     result = (
-        df_gebaeude.groupby("nutzungsart", as_index=False)["flaeche_m2"]
+        df_gebaeude.groupby("raumtyp_ebp", as_index=False)["flaeche_m2"]
         .sum()
-        .rename(columns={"flaeche_m2": "flaeche_m2_gesamt"})
-        .sort_values("nutzungsart")
+        .sort_values("raumtyp_ebp")
         .reset_index(drop=True)
     )
     return result

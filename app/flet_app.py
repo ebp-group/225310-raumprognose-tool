@@ -18,6 +18,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any
+import logging
 
 import flet as ft
 import flet_datatable2 as fdt
@@ -38,6 +39,10 @@ from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studie
 
 SPLASH_DURATION_SECONDS = 2
 SPLASH_FADE_OUT_MS = 300
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+log.setLevel(logging.DEBUG)
 
 # ── UI helper functions ───────────────────────────────────────────────────────
 
@@ -255,7 +260,7 @@ def main(page: ft.Page) -> None:
         opacity=1.0,
         animate_opacity=ft.Animation(SPLASH_FADE_OUT_MS, ft.AnimationCurve.EASE_OUT),
     )
-    page.overlay.append(splash_overlay)
+    #page.overlay.append(splash_overlay)
     page.update()
 
     def _dismiss_splash() -> None:
@@ -268,7 +273,7 @@ def main(page: ft.Page) -> None:
         page.overlay.remove(splash_overlay)
         page.update()
 
-    threading.Thread(target=_dismiss_splash, daemon=True).start()
+    #threading.Thread(target=_dismiss_splash, daemon=True).start()
 
     # ── Mutable application state ─────────────────────────────────────────
     state: dict[str, Any] = {
@@ -283,11 +288,37 @@ def main(page: ft.Page) -> None:
 
     # ── Data loading ──────────────────────────────────────────────────────
 
-    async def load_inventory_file(e) -> None:
-        await _pick_file("gebaeude", gebaeude_label)
+    def load_all_data(e) -> bool:
+        """Load all three datasets. Returns *True* on success."""
+        if any(state[f"custom_{key}"] is None for key in ("gebaeude", "studierende", "faktoren")):
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text("Bitte zuerst alle Dateien auswählen."),
+                    bgcolor=ft.Colors.RED_400,
+                )
+            )
+            return False
+        try:
+            state["df_gebaeude"] = load_gebaeude_raeume(state["custom_gebaeude"])
+            state["df_studierende"] = load_studierende(state["custom_studierende"])
+            state["df_faktoren"] = load_nutzungsfaktoren(state["custom_faktoren"])
 
+            _update_scenario_options()
+            rebuild_content()
+            page.update()
+            return True
+        except Exception as exc:
+            log.exception("Error loading data")
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text(f"Fehler beim Laden der Daten: {exc}"),
+                    bgcolor=ft.Colors.RED_400,
+                )
+            )
+            return False
 
     def get_results() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        # TODO Fix calculations
         """Return (current_area, demand, surplus_deficit) DataFrames."""
         df_current = current_area_by_nutzungsart(state["df_gebaeude"])
         df_demand = future_demand(
@@ -295,12 +326,13 @@ def main(page: ft.Page) -> None:
         )
         df_sd = surplus_deficit(df_current, df_demand)
         return df_current, df_demand, df_sd
+        
 
     # ── File picker ──────────────────────────────────────────────────────
 
-    gebaeude_label = ft.Text("Standard", size=12, italic=True)
-    studierende_label = ft.Text("Standard", size=12, italic=True)
-    faktoren_label = ft.Text("Standard", size=12, italic=True)
+    gebaeude_label = ft.Text("Keine Datei gewählt", size=12, italic=True)
+    studierende_label = ft.Text("Keine Datei gewählt", size=12, italic=True)
+    faktoren_label = ft.Text("Keine Datei gewählt", size=12, italic=True)
 
     async def _pick_file(key: str, label: ft.Text):
         """Open a file-picker dialog for one of the three input datasets.
@@ -324,11 +356,22 @@ def main(page: ft.Page) -> None:
             label.value = Path(files[0].path).name
         else:
             state[f"custom_{key}"] = None
-            label.value = "Standard"
+            label.value = "Keine Datei gewählt"
         
         _update_scenario_options()
         rebuild_content()
         page.update()
+
+    async def load_inventory_file(e) -> None:
+        await _pick_file("gebaeude", gebaeude_label)
+
+    async def load_person_file(e) -> None:
+        await _pick_file("studierende", studierende_label)
+
+    async def load_faktoren_file(e) -> None:
+        await _pick_file("faktoren", faktoren_label)
+
+
 
     # Export handlers
     async def _save_excel(_e):
@@ -381,7 +424,7 @@ def main(page: ft.Page) -> None:
                 ft.dropdown.Option(s)
                 for s in sorted(state["df_faktoren"]["szenario"].unique().tolist())
             ]
-        return [ft.dropdown.Option("Basis")]
+        return []
 
     def _on_scenario_changed(e: ft.ControlEvent):
         state["scenario"] = e.control.value
@@ -420,14 +463,14 @@ def main(page: ft.Page) -> None:
         ):
             content_area.content = ft.Container(
                 content=ft.Text(
-                    "Keine Daten geladen. Bitte Dateien prüfen.",
+                    "Bitte zuerst Daten laden.",
                     size=16,
-                    color=ft.Colors.RED,
+                    color=ft.Colors.BLUE,
                 ),
                 padding=40,
             )
             return
-
+        
         _, df_demand, df_sd = get_results()
         years = sorted(df_sd["jahr"].unique())
 
@@ -478,6 +521,11 @@ def main(page: ft.Page) -> None:
             scroll=ft.ScrollMode.AUTO,
             spacing=16,
         )
+
+         # TODO remove
+        page.update()
+        return
+
 
         # ── Tab 2: Ergebnisse ─────────────────────────────────────────────
         metric_cards = []
@@ -727,19 +775,26 @@ def main(page: ft.Page) -> None:
                 ),
                 gebaeude_label,
                 ft.Button(
-                    "Studierende",
-                    on_click=lambda _: _pick_file("studierende", studierende_label),
+                    "Studierende & Mitarbeitende",
+                    on_click=load_person_file,
                     icon=ft.Icons.UPLOAD_FILE,
                     width=220,
                 ),
                 studierende_label,
                 ft.Button(
                     "Nutzungsfaktoren",
-                    on_click=lambda _: _pick_file("faktoren", faktoren_label),
+                    on_click=load_faktoren_file,
                     icon=ft.Icons.UPLOAD_FILE,
                     width=220,
                 ),
                 faktoren_label,
+                ft.Divider(),
+                ft.Button(
+                    "Alle Dateien laden",
+                    on_click=load_all_data,
+                    icon=ft.Icons.CHECK,
+                    width=220,
+                ),
             ],
             spacing=8,
             scroll=ft.ScrollMode.AUTO,

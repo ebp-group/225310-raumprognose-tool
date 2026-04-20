@@ -6,16 +6,18 @@ that the expected columns are present, and returns a :class:`pandas.DataFrame`.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import IO
 
 import pandas as pd
+from utils import get_in_memory_connection, query_to_dataframe
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
 
-_GEBAEUDE_COLS = {"gebaeude", "raum", "nutzungsart", "flaeche_m2"}
-_STUDIERENDE_COLS = {"jahr", "anzahl_studierende"}
-_NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_student"}
+_GEBAEUDE_COLS = {"Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche m²", "Betriebsaufnahme", "Betriebsende"}
+_STUDIERENDE_COLS = {"jahr", "anzahl_studierende", "anzahl_forschung_monatslohn", "anzahl_services_monatslohn", "anzahl_forschung_studenlohn", "anzahl_services_stundenlohn"}
+_NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_person", "schritt"}
 
 FileSource = str | Path | IO[bytes]
 
@@ -34,17 +36,17 @@ def _validate_columns(df: pd.DataFrame, expected: set[str], source: str) -> None
     missing = expected - set(df.columns)
     if missing:
         raise ValueError(
-            f"File '{source}' is missing required columns: {sorted(missing)}"
+            f"File '{os.path.basename(source)}' is missing required columns: {sorted(missing)}"
         )
 
 
 def load_gebaeude_raeume(
-    source: FileSource | None = None,
+    source: FileSource,
 ) -> pd.DataFrame:
     """Load the buildings-and-rooms Excel file.
 
     Args:
-        source: Path, file-like object, or ``None`` to use the default
+        source: Path, file-like object
             ``data/gebaeude_raeume.xlsx``.
 
     Returns:
@@ -54,19 +56,36 @@ def load_gebaeude_raeume(
     Raises:
         ValueError: If required columns are missing.
     """
-    path = source if source is not None else _DATA_DIR / "gebaeude_raeume.xlsx"
-    df = pd.read_excel(path, engine="openpyxl")
-    _validate_columns(df, _GEBAEUDE_COLS, "gebaeude_raeume.xlsx")
+    #df = pd.read_excel(source, engine="openpyxl")
+    conn = get_in_memory_connection()
+    sql = f"""SELECT
+    "Eigentumsform" as eigentumsform,
+    "Abgabeart" as abgabeart,
+    "Eigentümer" as eigentümer,
+    "Raumtyp EBP" as raumtyp_ebp,
+    "Fläche m²" as flaeche_m2,
+    "Betriebsaufnahme" as betriebsaufnahme,
+    "Betriebsende"
+    FROM read_xlsx(
+    '{source}',
+    range="A:S",
+    header=True,
+    all_varchar = true,
+    stop_at_empty = true)
+    """
+
+    df = query_to_dataframe(conn, sql)
+    _validate_columns(df, _GEBAEUDE_COLS, os.path.basename(source))
     return df
 
 
 def load_studierende(
-    source: FileSource | None = None,
+    source: FileSource,
 ) -> pd.DataFrame:
     """Load the student-numbers Excel file.
 
     Args:
-        source: Path, file-like object, or ``None`` to use the default
+        source: Path, file-like object
             ``data/studierende.xlsx``.
 
     Returns:
@@ -75,19 +94,18 @@ def load_studierende(
     Raises:
         ValueError: If required columns are missing.
     """
-    path = source if source is not None else _DATA_DIR / "studierende.xlsx"
-    df = pd.read_excel(path, engine="openpyxl")
-    _validate_columns(df, _STUDIERENDE_COLS, "studierende.xlsx")
-    return df.sort_values("jahr").reset_index(drop=True)
+    df = pd.read_excel(source, engine="openpyxl")
+    _validate_columns(df, _STUDIERENDE_COLS,  os.path.basename(source))
+    return df
 
 
 def load_nutzungsfaktoren(
-    source: FileSource | None = None,
+    source: FileSource
 ) -> pd.DataFrame:
     """Load the usage-factors Excel file.
 
     Args:
-        source: Path, file-like object, or ``None`` to use the default
+        source: Path, file-like object
             ``data/nutzungsfaktoren.xlsx``.
 
     Returns:
@@ -97,7 +115,6 @@ def load_nutzungsfaktoren(
     Raises:
         ValueError: If required columns are missing.
     """
-    path = source if source is not None else _DATA_DIR / "nutzungsfaktoren.xlsx"
-    df = pd.read_excel(path, engine="openpyxl")
-    _validate_columns(df, _NUTZUNGSFAKTOREN_COLS, "nutzungsfaktoren.xlsx")
+    df = pd.read_excel(source, engine="openpyxl")
+    _validate_columns(df, _NUTZUNGSFAKTOREN_COLS, os.path.basename(source))
     return df

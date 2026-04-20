@@ -29,22 +29,22 @@ def _():
     import pandas as pd
 
     # Ensure the app package is importable
-    _repo_root = Path(__file__).resolve().parent
-    if str(_repo_root) not in sys.path:
-        sys.path.insert(0, str(_repo_root))
+    # _repo_root = Path(__file__).resolve().parent
+    # if str(_repo_root) not in sys.path:
+    #     sys.path.insert(0, str(_repo_root))
 
-    from app.calculations import (
+    from .calculations import (
         current_area_by_nutzungsart,
         future_demand,
         surplus_deficit,
         wide_results,
     )
-    from app.data_loader import (
+    from .data_loader import (
         load_gebaeude_raeume,
         load_nutzungsfaktoren,
         load_studierende,
     )
-    from app.utils import get_in_memory_connection, load_dataframe, query_to_dataframe
+    from .utils import get_in_memory_connection, load_dataframe, query_to_dataframe
 
     return (
         Path,
@@ -55,7 +55,6 @@ def _():
         load_gebaeude_raeume,
         load_nutzungsfaktoren,
         load_studierende,
-        pd,
         plt,
         query_to_dataframe,
         surplus_deficit,
@@ -75,10 +74,12 @@ def _(
 ):
     mo.md("## 1 – Load Excel data into in-memory DuckDB")
 
+    base_path = Path(r"C:\Users\ods\OneDrive - EBP\CH_P_225310 - PE_TPF_UniSG - General\40_BEARBEITUNG\04_Auswertung\02_Datenmodell")
+
     # Load the three Excel files via the existing data_loader module
-    df_gebaeude = load_gebaeude_raeume()
-    df_studierende = load_studierende()
-    df_faktoren = load_nutzungsfaktoren()
+    df_gebaeude = load_gebaeude_raeume(base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx")
+    df_studierende = load_studierende(base_path / "prognose_studierende_und_ma.xlsx")
+    df_faktoren = load_nutzungsfaktoren(base_path / "nutzungsfaktoren.xlsx")
 
     # Store them in an in-memory DuckDB database using app.utils helpers
     con = get_in_memory_connection()
@@ -273,6 +274,11 @@ def _(con, mo, scenario_selector):
 
     _result = con.execute(_query, [scenario_selector.value]).fetchdf()
     mo.ui.table(_result)
+    return
+
+
+@app.cell
+def _():
     return
 
 
