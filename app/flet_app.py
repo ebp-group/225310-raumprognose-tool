@@ -283,21 +283,9 @@ def main(page: ft.Page) -> None:
 
     # ── Data loading ──────────────────────────────────────────────────────
 
-    def load_all_data() -> bool:
-        """Load all three datasets. Returns *True* on success."""
-        try:
-            state["df_gebaeude"] = load_gebaeude_raeume(state["custom_gebaeude"])
-            state["df_studierende"] = load_studierende(state["custom_studierende"])
-            state["df_faktoren"] = load_nutzungsfaktoren(state["custom_faktoren"])
-            return True
-        except Exception as exc:
-            page.show_dialog(
-                ft.SnackBar(
-                    content=ft.Text(f"Fehler beim Laden der Daten: {exc}"),
-                    bgcolor=ft.Colors.RED_400,
-                )
-            )
-            return False
+    async def load_inventory_file(e) -> None:
+        await _pick_file("gebaeude", gebaeude_label)
+
 
     def get_results() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Return (current_area, demand, surplus_deficit) DataFrames."""
@@ -337,7 +325,7 @@ def main(page: ft.Page) -> None:
         else:
             state[f"custom_{key}"] = None
             label.value = "Standard"
-        load_all_data()
+        
         _update_scenario_options()
         rebuild_content()
         page.update()
@@ -733,7 +721,7 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Button(
                     "Gebäude & Räume",
-                    on_click=lambda _: _pick_file("gebaeude", gebaeude_label),
+                    on_click=load_inventory_file,
                     icon=ft.Icons.UPLOAD_FILE,
                     width=220,
                 ),
@@ -764,7 +752,6 @@ def main(page: ft.Page) -> None:
 
     # ── Initial data load & render ────────────────────────────────────────
 
-    load_all_data()
     _update_scenario_options()
     rebuild_content()
 
