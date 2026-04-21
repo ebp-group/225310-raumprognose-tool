@@ -143,7 +143,18 @@ def _(current_area_by_nutzungsart, df_gebaeude, mo):
 
     df_current = current_area_by_nutzungsart(df_gebaeude)
 
-    mo.ui.table(df_current)
+    mo.vstack([
+        mo.md("""
+**SQL (DuckDB):**
+```sql
+SELECT "Raumtyp EBP", SUM("Fläche") AS "Fläche"
+FROM gebaeude_raeume
+GROUP BY "Raumtyp EBP"
+ORDER BY "Raumtyp EBP"
+```
+"""),
+        mo.ui.table(df_current),
+    ])
     return (df_current,)
 
 
@@ -154,7 +165,23 @@ def _(df_faktoren, df_studierende, future_demand, mo, scenario_selector):
     selected_scenario = scenario_selector.value
     df_demand = future_demand(df_studierende, df_faktoren, selected_scenario)
 
-    mo.ui.table(df_demand)
+    mo.vstack([
+        mo.md(f"""
+**SQL (DuckDB)** – Szenario: `{selected_scenario}`
+```sql
+SELECT f."Nutzungsart", s."Jahr",
+       s."Studierende" * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
+FROM studierende AS s
+CROSS JOIN (
+    SELECT "Nutzungsart", "Faktor_m2_pro_Person"
+    FROM nutzungsfaktoren
+    WHERE "Szenario" = '{selected_scenario}'
+) AS f
+ORDER BY f."Nutzungsart", s."Jahr"
+```
+"""),
+        mo.ui.table(df_demand),
+    ])
     return df_demand, selected_scenario
 
 
@@ -164,7 +191,23 @@ def _(df_current, df_demand, mo, surplus_deficit):
 
     df_sd = surplus_deficit(df_current, df_demand)
 
-    mo.ui.table(df_sd)
+    mo.vstack([
+        mo.md("""
+**SQL (DuckDB):**
+```sql
+SELECT d."Nutzungsart", d."Jahr",
+       c."Fläche",
+       d."Bedarf_m2",
+       c."Fläche" - d."Bedarf_m2" AS "Differenz_m2"
+FROM demand AS d
+LEFT JOIN current_area AS c
+       ON d."Nutzungsart" = c."Raumtyp EBP"
+```
+*(Positive Differenz = Überschuss, negative Differenz = Defizit.  
+`NULL` in „Fläche" und „Differenz\_m2" bedeutet: keine Ist-Fläche für diese Nutzungsart vorhanden.)*
+"""),
+        mo.ui.table(df_sd),
+    ])
     return (df_sd,)
 
 
@@ -173,7 +216,21 @@ def _(df_sd, mo, wide_results):
     mo.md("### Step D – Wide result table")
 
     df_wide = wide_results(df_sd)
-    mo.ui.table(df_wide.reset_index())
+
+    mo.vstack([
+        mo.md("""
+**SQL (DuckDB):**
+```sql
+PIVOT sd
+ON "Jahr"
+USING FIRST("Differenz_m2")
+GROUP BY "Nutzungsart"
+ORDER BY "Nutzungsart"
+```
+*(Eine Spalte pro Prognosejahr; Werte = `Differenz_m2` aus Schritt C.)*
+"""),
+        mo.ui.table(df_wide.reset_index()),
+    ])
     return (df_wide,)
 
 
