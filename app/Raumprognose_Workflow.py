@@ -32,6 +32,12 @@ def _():
     import matplotlib.pyplot as plt
     import pandas as pd
 
+    from .calculations import (
+        current_area_by_nutzungsart,
+        future_demand,
+        surplus_deficit,
+        wide_results,
+    )
     from .data_loader import (
         load_gebaeude_raeume,
         load_nutzungsfaktoren,
@@ -42,12 +48,16 @@ def _():
     return (
         Path,
         io,
+        current_area_by_nutzungsart,
+        future_demand,
         load_gebaeude_raeume,
         load_nutzungsfaktoren,
         load_studierende,
         os,
         pd,
         plt,
+        surplus_deficit,
+        wide_results,
         get_in_memory_connection,
         load_dataframe,
         query_to_dataframe,
@@ -128,83 +138,41 @@ def _(df_faktoren, mo):
 
 
 @app.cell
-def _(df_gebaeude, mo):
-    mo.md("### Step A – Current area by usage type (intermediate)")
+def _(current_area_by_nutzungsart, df_gebaeude, mo):
+    mo.md("### Step A – Current area by usage type")
 
-    df_current_grouped = df_gebaeude.groupby("Raumtyp EBP", as_index=False)["Fläche"].sum()
-    df_current = (
-        df_current_grouped.sort_values("Raumtyp EBP").reset_index(drop=True)
-    )
+    df_current = current_area_by_nutzungsart(df_gebaeude)
 
-    mo.ui.tabs(
-        {
-            "Grouped": mo.ui.table(df_current_grouped),
-            "Final": mo.ui.table(df_current),
-        }
-    )
-    return df_current, df_current_grouped
+    mo.ui.table(df_current)
+    return (df_current,)
 
 
 @app.cell
-def _(df_faktoren, df_studierende, mo, scenario_selector):
-    mo.md("### Step B – Future demand (intermediate)")
+def _(df_faktoren, df_studierende, future_demand, mo, scenario_selector):
+    mo.md("### Step B – Future demand")
 
     selected_scenario = scenario_selector.value
-    faktoren_sel = df_faktoren[df_faktoren["Szenario"] == selected_scenario].copy()
-    cross = df_studierende.merge(faktoren_sel, how="cross")
-    cross["Bedarf_m2"] = cross["Studierende"] * cross["Faktor_m2_pro_Person"]
+    df_demand = future_demand(df_studierende, df_faktoren, selected_scenario)
 
-    df_demand = (
-        cross[["Nutzungsart", "Jahr", "Bedarf_m2"]]
-        .sort_values(["Nutzungsart", "Jahr"])
-        .reset_index(drop=True)
-    )
-
-    mo.ui.tabs(
-        {
-            "Selected factors": mo.ui.table(faktoren_sel),
-            "Cross join (head)": mo.ui.table(cross.head(100)),
-            "Final": mo.ui.table(df_demand),
-        }
-    )
-    return cross, df_demand, faktoren_sel, selected_scenario
+    mo.ui.table(df_demand)
+    return df_demand, selected_scenario
 
 
 @app.cell
-def _(df_current, df_demand, mo):
-    mo.md("### Step C – Surplus/deficit (intermediate)")
+def _(df_current, df_demand, mo, surplus_deficit):
+    mo.md("### Step C – Surplus/deficit")
 
-    merged = df_demand.merge(
-        df_current,
-        left_on="Nutzungsart",
-        right_on="Raumtyp EBP",
-        how="left",
-    )
-    merged["Differenz_m2"] = merged["Fläche"] - merged["Bedarf_m2"]
+    df_sd = surplus_deficit(df_current, df_demand)
 
-    df_sd = merged[["Nutzungsart", "Jahr", "Fläche", "Bedarf_m2", "Differenz_m2"]].reset_index(
-        drop=True
-    )
-
-    mo.ui.tabs(
-        {
-            "Merged": mo.ui.table(merged),
-            "Final": mo.ui.table(df_sd),
-        }
-    )
-    return df_sd, merged
+    mo.ui.table(df_sd)
+    return (df_sd,)
 
 
 @app.cell
-def _(df_sd, mo):
+def _(df_sd, mo, wide_results):
     mo.md("### Step D – Wide result table")
 
-    df_wide = df_sd.pivot_table(
-        index="Nutzungsart",
-        columns="Jahr",
-        values="Differenz_m2",
-        aggfunc="first",
-    )
+    df_wide = wide_results(df_sd)
     mo.ui.table(df_wide.reset_index())
     return (df_wide,)
 

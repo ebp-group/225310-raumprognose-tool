@@ -2,11 +2,13 @@
 
 All functions are pure (no side-effects, no UI calls) and work
 exclusively with :class:`pandas.DataFrame` objects so they can be tested
-independently of the UI layer.
+independently of the UI layer.  Internally every function opens a
+short-lived in-memory DuckDB connection and runs SQL for the computation.
 """
 
 from __future__ import annotations
 
+import duckdb
 import pandas as pd
 
 
@@ -15,19 +17,27 @@ def current_area_by_nutzungsart(df_gebaeude: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         df_gebaeude: Buildings-and-rooms DataFrame with at least the columns
-            ``nutzungsart`` and ``flaeche_m2``.
+            ``Raumtyp EBP`` and ``Fläche``.
 
     Returns:
-        DataFrame with columns ``nutzungsart`` and ``flaeche_m2_gesamt``,
-        sorted by ``nutzungsart``.
+        DataFrame with columns ``Raumtyp EBP`` and ``Fläche``,
+        sorted by ``Raumtyp EBP``.
+
+    SQL equivalent::
+
+        SELECT "Raumtyp EBP", SUM("Fläche") AS "Fläche"
+        FROM gebaeude
+        GROUP BY "Raumtyp EBP"
+        ORDER BY "Raumtyp EBP"
     """
-    result = (
-        df_gebaeude.groupby("Raumtyp EBP", as_index=False)["Fläche"]
-        .sum()
-        .sort_values("Raumtyp EBP")
-        .reset_index(drop=True)
-    )
-    return result
+    with duckdb.connect(":memory:") as conn:
+        conn.register("gebaeude", df_gebaeude)
+        return conn.execute("""
+            SELECT "Raumtyp EBP", SUM("Fläche") AS "Fläche"
+            FROM gebaeude
+            GROUP BY "Raumtyp EBP"
+            ORDER BY "Raumtyp EBP"
+        """).fetchdf()
 
 
 def future_demand(
@@ -38,26 +48,47 @@ def future_demand(
     """Calculate future room demand (m²) per usage type and forecast year.
 
     For each (year, usage-type) combination the demand is:
-        ``anzahl_studierende × faktor_m2_pro_student``
+        ``Studierende × Faktor_m2_pro_Person``
 
     Args:
-        df_studierende: Student-numbers DataFrame with columns ``jahr`` and
-            ``anzahl_studierende``.
-        df_faktoren: Usage-factors DataFrame with columns ``szenario``,
-            ``nutzungsart``, ``faktor_m2_pro_student``.
+        df_studierende: Student-numbers DataFrame with columns ``Jahr`` and
+            ``Studierende``.
+        df_faktoren: Usage-factors DataFrame with columns ``Szenario``,
+            ``Nutzungsart``, ``Faktor_m2_pro_Person``.
         szenario: The scenario name to use for filtering *df_faktoren*.
 
     Returns:
-        DataFrame with columns ``nutzungsart``, ``jahr``, ``bedarf_m2``.
+        DataFrame with columns ``Nutzungsart``, ``Jahr``, ``Bedarf_m2``.
+
+    SQL equivalent::
+
+        SELECT f."Nutzungsart", s."Jahr",
+               s."Studierende" * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
+        FROM studierende AS s
+        CROSS JOIN (
+            SELECT "Nutzungsart", "Faktor_m2_pro_Person"
+            FROM faktoren
+            WHERE "Szenario" = ?
+        ) AS f
+        ORDER BY f."Nutzungsart", s."Jahr"
     """
-    faktoren_sel = df_faktoren[df_faktoren["Szenario"] == szenario].copy()
-    cross = df_studierende.merge(faktoren_sel, how="cross")
-    cross["Bedarf_m2"] = cross["Studierende"] * cross["Faktor_m2_pro_Person"]
-    return (
-        cross[["Nutzungsart", "Jahr", "Bedarf_m2"]]
-        .sort_values(["Nutzungsart", "Jahr"])
-        .reset_index(drop=True)
-    )
+    with duckdb.connect(":memory:") as conn:
+        conn.register("studierende", df_studierende)
+        conn.register("faktoren", df_faktoren)
+        return conn.execute(
+            """
+            SELECT f."Nutzungsart", s."Jahr",
+                   s."Studierende" * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
+            FROM studierende AS s
+            CROSS JOIN (
+                SELECT "Nutzungsart", "Faktor_m2_pro_Person"
+                FROM faktoren
+                WHERE "Szenario" = ?
+            ) AS f
+            ORDER BY f."Nutzungsart", s."Jahr"
+            """,
+            [szenario],
+        ).fetchdf()
 
 
 def surplus_deficit(
@@ -78,12 +109,29 @@ def surplus_deficit(
     Returns:
         DataFrame with columns ``Nutzungsart``, ``Jahr``, ``Fläche``,
         ``Bedarf_m2``, ``Differenz_m2`` (positive = surplus, negative = deficit).
+
+    SQL equivalent::
+
+        SELECT d."Nutzungsart", d."Jahr",
+               c."Fläche",
+               d."Bedarf_m2",
+               c."Fläche" - d."Bedarf_m2" AS "Differenz_m2"
+        FROM demand AS d
+        LEFT JOIN current_area AS c ON d."Nutzungsart" = c."Raumtyp EBP"
     """
-    merged = df_demand.merge(df_current, left_on="Nutzungsart", right_on="Raumtyp EBP", how="left")
-    merged["Differenz_m2"] = merged["Fläche"] - merged["Bedarf_m2"]
-    return merged[
-        ["Nutzungsart", "Jahr", "Fläche", "Bedarf_m2", "Differenz_m2"]
-    ].reset_index(drop=True)
+    with duckdb.connect(":memory:") as conn:
+        conn.register("current_area", df_current)
+        conn.register("demand", df_demand)
+        # ROW_NUMBER preserves the original row order of the demand table.
+        return conn.execute("""
+            SELECT d."Nutzungsart", d."Jahr",
+                   c."Fläche",
+                   d."Bedarf_m2",
+                   c."Fläche" - d."Bedarf_m2" AS "Differenz_m2"
+            FROM (SELECT *, ROW_NUMBER() OVER () AS _rn FROM demand) AS d
+            LEFT JOIN current_area AS c ON d."Nutzungsart" = c."Raumtyp EBP"
+            ORDER BY d._rn
+        """).fetchdf()
 
 
 def wide_results(df_sd: pd.DataFrame) -> pd.DataFrame:
@@ -95,10 +143,26 @@ def wide_results(df_sd: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame indexed by ``Nutzungsart`` with one column per forecast year
         showing ``Differenz_m2``.
+
+    SQL equivalent::
+
+        PIVOT sd
+        ON "Jahr"
+        USING FIRST("Differenz_m2")
+        GROUP BY "Nutzungsart"
+        ORDER BY "Nutzungsart"
     """
-    return df_sd.pivot_table(
-        index="Nutzungsart",
-        columns="Jahr",
-        values="Differenz_m2",
-        aggfunc="first",
-    )
+    with duckdb.connect(":memory:") as conn:
+        conn.register("sd", df_sd)
+        result = conn.execute("""
+            PIVOT sd
+            ON "Jahr"
+            USING FIRST("Differenz_m2")
+            GROUP BY "Nutzungsart"
+            ORDER BY "Nutzungsart"
+        """).fetchdf()
+    result = result.set_index("Nutzungsart")
+    # DuckDB PIVOT names pivot columns after their string representation;
+    # convert back to integers to match the original pandas pivot_table output.
+    result.columns = pd.Index([int(c) for c in result.columns], name="Jahr")
+    return result
