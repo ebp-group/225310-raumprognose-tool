@@ -53,14 +53,14 @@ def get_assets_dir() -> Path:
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     """Convert a pandas DataFrame to a Flet DataTable widget."""
     columns = [
-        fdt.DataColumn2(label=ft.Text(str(col), weight=ft.FontWeight.BOLD))
+        ft.DataColumn(label=ft.Text(str(col), weight=ft.FontWeight.BOLD))
         for col in df.columns
     ]
     rows = []
     for _, row in df.head(max_rows).iterrows():
         cells = [ft.DataCell(ft.Text(str(val))) for val in row]
         rows.append(fdt.DataRow2(cells=cells))
-    return fdt.DataTable2(
+    return ft.DataTable(
         columns=columns,
         rows=rows,
         border=ft.Border.all(1, ft.Colors.GREY_300),
@@ -108,8 +108,8 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
     """Line chart of student numbers over time."""
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(
-        df_studierende["jahr"],
-        df_studierende["anzahl_studierende"],
+        df_studierende["Jahr"],
+        df_studierende["Studierende"],
         marker="o",
         linewidth=2,
         color="#1f77b4",
@@ -128,15 +128,15 @@ def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
     #years = sorted(df_demand["jahr"].unique())
     years = [2026, 2030, 2040, 2050]
 
-    nutzungsarten = sorted(df_demand["nutzungsart"].unique())
+    nutzungsarten = sorted(df_demand["Nutzungsart"].unique())
     x = range(len(nutzungsarten))
     width = 0.8 / max(len(years), 1)
 
     for i, year in enumerate(years):
-        df_year = df_demand[df_demand["jahr"] == year]
+        df_year = df_demand[df_demand["Jahr"] == year]
         values = []
         for n in nutzungsarten:
-            subset = df_year[df_year["nutzungsart"] == n]["bedarf_m2"]
+            subset = df_year[df_year["Nutzungsart"] == n]["Bedarf_m2"]
             values.append(subset.values[0] if len(subset) > 0 else 0)
         offset = (i - len(years) / 2 + 0.5) * width
         ax.bar([xi + offset for xi in x], values, width, label=str(year))
@@ -159,9 +159,9 @@ def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[plt.Figure]:
     figs: list[plt.Figure] = []
     for year in years:
         fig, ax = plt.subplots(figsize=(5, 4))
-        df_year = df_sd[df_sd["jahr"] == year]
-        colors = ["#2ecc71" if v >= 0 else "#e74c3c" for v in df_year["differenz_m2"]]
-        ax.bar(df_year["nutzungsart"], df_year["differenz_m2"], color=colors)
+        df_year = df_sd[df_sd["Jahr"] == year]
+        colors = ["#2ecc71" if v >= 0 else "#e74c3c" for v in df_year["Differenz_m2"]]
+        ax.bar(df_year["Nutzungsart"], df_year["Differenz_m2"], color=colors)
         ax.set_xlabel("Nutzungsart")
         ax.set_ylabel("Differenz (m²)")
         ax.set_title(str(year))
@@ -226,7 +226,7 @@ def _build_excel(
                         pass
 
     ws1 = wb.active
-    _write_sheet(ws1, df_results, "Ergebnisse", diff_col="differenz_m2")
+    _write_sheet(ws1, df_results, "Ergebnisse", diff_col="Differenz_m2")
 
     ws2 = wb.create_sheet()
     _write_sheet(ws2, df_stud, "Studierende")
@@ -430,7 +430,7 @@ def main(page: ft.Page) -> None:
         if state["df_faktoren"] is not None:
             return [
                 ft.dropdown.Option(s)
-                for s in sorted(state["df_faktoren"]["szenario"].unique().tolist())
+                for s in sorted(state["df_faktoren"]["Szenario"].unique().tolist())
             ]
         return []
 
@@ -455,7 +455,7 @@ def main(page: ft.Page) -> None:
         """
         scenario_dropdown.options = _scenario_options()
         if state["df_faktoren"] is not None:
-            available = state["df_faktoren"]["szenario"].unique().tolist()
+            available = state["df_faktoren"]["Szenario"].unique().tolist()
             if state["scenario"] not in available:
                 state["scenario"] = available[0] if available else "Basis"
                 scenario_dropdown.value = state["scenario"]
@@ -486,7 +486,16 @@ def main(page: ft.Page) -> None:
         
         log.debug("Calculating results...")
         _, df_demand, df_sd = get_results()
-        years = sorted(df_sd["jahr"].unique())
+        years = sorted(df_sd["Jahr"].unique())
+
+        df_studierende_display = state["df_studierende"].rename(
+            columns={
+                "Forschung_Monatslohn": "Forschung (Monatslohn)",
+                "Forschung_Stundenlohn": "Forschung (Stundenlohn)",
+                "Services_Monatslohn": "Services (Monatslohn)",
+                "Services_Stundenlohn": "Services (Stundenlohn)",
+            }
+        )
 
         # ── Tab 1: Übersicht ──────────────────────────────────────────────
         tab1 = ft.Column(
@@ -500,36 +509,30 @@ def main(page: ft.Page) -> None:
                     height=300,
                 ),
                 ft.Divider(),
-                ft.Row(
-                    [
-                        ft.Column(
-                            [
-                                ft.Text(
-                                    "Studierendenzahlen",
-                                    size=20,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                                _df_to_datatable(state["df_studierende"]),
-                            ],
-                            expand=True,
+                ft.Text(
+                    "Studierende & Mitarbeitende",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                ft.Container(
+                    content=ft.Column(
+                        [_df_to_datatable(df_studierende_display),],
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
+                    height=300,
+                ),
+                ft.Divider(),
+                ft.Text(
+                    f"Nutzungsfaktoren – Szenario: {state['scenario']}",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                ft.Container(
+                    content=ft.Column(
+                            [_df_to_datatable(state["df_faktoren"][state["df_faktoren"]["Szenario"] == state["scenario"]])],
+                            scroll=ft.ScrollMode.AUTO,
                         ),
-                        ft.Column(
-                            [
-                                ft.Text(
-                                    f"Nutzungsfaktoren – Szenario: {state['scenario']}",
-                                    size=20,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                                _df_to_datatable(
-                                    state["df_faktoren"][
-                                        state["df_faktoren"]["szenario"]
-                                        == state["scenario"]
-                                    ]
-                                ),
-                            ],
-                            expand=True,
-                        ),
-                    ],
+                    height=300,
                 ),
             ],
             scroll=ft.ScrollMode.AUTO,
@@ -538,8 +541,8 @@ def main(page: ft.Page) -> None:
 
         # ── Tab 2: Ergebnisse ─────────────────────────────────────────────
         metric_cards = []
-        for year in years:
-            total_diff = df_sd[df_sd["jahr"] == year]["differenz_m2"].sum()
+        for year in [2026, 2030, 2040, 2050]:
+            total_diff = df_sd[df_sd["Jahr"] == year]["Differenz_m2"].sum()
             metric_cards.append(
                 _metric_card(
                     label=str(year),
@@ -550,9 +553,9 @@ def main(page: ft.Page) -> None:
 
         # Pivot table with colour coding
         pivot = df_sd.pivot_table(
-            index="nutzungsart",
-            columns="jahr",
-            values="differenz_m2",
+            index="Nutzungsart",
+            columns="Jahr",
+            values="Differenz_m2",
             aggfunc="first",
         )
         pivot.columns = [str(c) for c in pivot.columns]
@@ -598,11 +601,9 @@ def main(page: ft.Page) -> None:
 
         df_sd_display = df_sd.rename(
             columns={
-                "nutzungsart": "Nutzungsart",
-                "jahr": "Jahr",
-                "flaeche_m2_gesamt": "Ist-Fläche (m²)",
-                "bedarf_m2": "Bedarf (m²)",
-                "differenz_m2": "Differenz (m²)",
+                "Fläche": "Ist-Fläche (m²)",
+                "Bedarf_m2": "Bedarf (m²)",
+                "Differenz_m2": "Differenz (m²)",
             }
         )
 

@@ -57,19 +57,13 @@ def load_gebaeude_raeume(
     Raises:
         ValueError: If required columns are missing.
     """
-    df = pd.read_excel(source, engine="openpyxl")
+    df = pd.read_excel(source, engine="openpyxl", header=0, usecols="A:S")
     _validate_columns(df, _GEBAEUDE_COLS, os.path.basename(source))
     df = df.rename(columns={
-        "Eigentumsform": "eigentumsform",
-        "Abgabeart": "abgabeart",
-        "Eigentümer": "eigentümer",
-        "Raumtyp EBP": "raumtyp_ebp",
-        "Fläche m²": "flaeche_m2",
-        "Betriebsaufnahme": "betriebsaufnahme",
-        "Betriebsende": "betriebsende"
+        "Fläche m²": "Fläche",
     })
 
-    return df
+    return df[df["Raumtyp EBP"].notna()].filter(["Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche", "Betriebsaufnahme", "Betriebsende"])
 
 
 def load_studierende(
@@ -88,7 +82,22 @@ def load_studierende(
         ValueError: If required columns are missing.
     """
     df = pd.read_excel(source, engine="openpyxl")
+    df["jahr"] = df["jahr"].astype(int)
+    df["anzahl_studierende"] = df["anzahl_studierende"].round(0).astype(int)
+    df["anzahl_forschung_monatslohn"] = df["anzahl_forschung_monatslohn"].round(0).astype(int)
+    df["anzahl_services_monatslohn"] = df["anzahl_services_monatslohn"].round(0).astype(int)
+    df["anzahl_forschung_studenlohn"] = df["anzahl_forschung_studenlohn"].round(0).astype(int)
+    df["anzahl_services_stundenlohn"] = df["anzahl_services_stundenlohn"].round(0).astype(int)
     _validate_columns(df, _STUDIERENDE_COLS,  os.path.basename(source))
+
+    df = df.rename(columns={
+        "jahr": "Jahr",
+        "anzahl_studierende": "Studierende",
+        "anzahl_forschung_monatslohn": "Forschung_Monatslohn",
+        "anzahl_services_monatslohn": "Services_Monatslohn",
+        "anzahl_forschung_studenlohn": "Forschung_Stundenlohn",
+        "anzahl_services_stundenlohn": "Services_Stundenlohn",
+    })
     return df
 
 
@@ -110,4 +119,10 @@ def load_nutzungsfaktoren(
     """
     df = pd.read_excel(source, engine="openpyxl")
     _validate_columns(df, _NUTZUNGSFAKTOREN_COLS, os.path.basename(source))
+    df = df.rename(columns={
+        "szenario": "Szenario",
+        "nutzungsart": "Nutzungsart",
+        "faktor_m2_pro_person": "Faktor_m2_pro_Person",
+        "schritt": "Schritt",
+    })
     return df

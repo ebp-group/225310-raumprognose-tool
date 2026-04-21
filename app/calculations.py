@@ -22,9 +22,9 @@ def current_area_by_nutzungsart(df_gebaeude: pd.DataFrame) -> pd.DataFrame:
         sorted by ``nutzungsart``.
     """
     result = (
-        df_gebaeude.groupby("raumtyp_ebp", as_index=False)["flaeche_m2"]
+        df_gebaeude.groupby("Raumtyp EBP", as_index=False)["Fläche"]
         .sum()
-        .sort_values("raumtyp_ebp")
+        .sort_values("Raumtyp EBP")
         .reset_index(drop=True)
     )
     return result
@@ -50,12 +50,12 @@ def future_demand(
     Returns:
         DataFrame with columns ``nutzungsart``, ``jahr``, ``bedarf_m2``.
     """
-    faktoren_sel = df_faktoren[df_faktoren["szenario"] == szenario].copy()
+    faktoren_sel = df_faktoren[df_faktoren["Szenario"] == szenario].copy()
     cross = df_studierende.merge(faktoren_sel, how="cross")
-    cross["bedarf_m2"] = cross["anzahl_studierende"] * cross["faktor_m2_pro_person"]
+    cross["Bedarf_m2"] = cross["Studierende"] * cross["Faktor_m2_pro_Person"]
     return (
-        cross[["nutzungsart", "jahr", "bedarf_m2"]]
-        .sort_values(["nutzungsart", "jahr"])
+        cross[["Nutzungsart", "Jahr", "Bedarf_m2"]]
+        .sort_values(["Nutzungsart", "Jahr"])
         .reset_index(drop=True)
     )
 
@@ -71,18 +71,18 @@ def surplus_deficit(
 
     Args:
         df_current: Output of :func:`current_area_by_nutzungsart` with columns
-            ``raumtyp_ebp`` and ``flaeche_m2``.
-        df_demand: Output of :func:`future_demand` with columns ``nutzungsart``,
-            ``jahr``, ``bedarf_m2``.
+            ``Raumtyp EBP`` and ``Fläche``.
+        df_demand: Output of :func:`future_demand` with columns ``Nutzungsart``,
+            ``Jahr``, ``Bedarf_m2``.
 
     Returns:
-        DataFrame with columns ``nutzungsart``, ``jahr``, ``flaeche_m2_gesamt``,
-        ``bedarf_m2``, ``differenz_m2`` (positive = surplus, negative = deficit).
+        DataFrame with columns ``Nutzungsart``, ``Jahr``, ``Fläche``,
+        ``Bedarf_m2``, ``Differenz_m2`` (positive = surplus, negative = deficit).
     """
-    merged = df_demand.merge(df_current, left_on="nutzungsart", right_on="raumtyp_ebp", how="left")
-    merged["differenz_m2"] = merged["flaeche_m2"] - merged["bedarf_m2"]
+    merged = df_demand.merge(df_current, left_on="Nutzungsart", right_on="Raumtyp EBP", how="left")
+    merged["Differenz_m2"] = merged["Fläche"] - merged["Bedarf_m2"]
     return merged[
-        ["nutzungsart", "jahr", "flaeche_m2", "bedarf_m2", "differenz_m2"]
+        ["Nutzungsart", "Jahr", "Fläche", "Bedarf_m2", "Differenz_m2"]
     ].reset_index(drop=True)
 
 
@@ -93,12 +93,12 @@ def wide_results(df_sd: pd.DataFrame) -> pd.DataFrame:
         df_sd: Output of :func:`surplus_deficit`.
 
     Returns:
-        DataFrame indexed by ``nutzungsart`` with one column per forecast year
-        showing ``differenz_m2``.
+        DataFrame indexed by ``Nutzungsart`` with one column per forecast year
+        showing ``Differenz_m2``.
     """
     return df_sd.pivot_table(
-        index="nutzungsart",
-        columns="jahr",
-        values="differenz_m2",
+        index="Nutzungsart",
+        columns="Jahr",
+        values="Differenz_m2",
         aggfunc="first",
     )
