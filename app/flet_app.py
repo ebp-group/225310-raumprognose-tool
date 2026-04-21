@@ -614,7 +614,7 @@ def main(page: ft.Page) -> None:
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
-                ft.Row(metric_cards, spacing=16, wrap=True),
+                ft.Row(metric_cards, spacing=16, wrap=False, scroll=ft.ScrollMode.AUTO),
                 ft.Divider(),
                 ft.Text(
                     "Differenz (m²) pro Nutzungsart und Jahr "
