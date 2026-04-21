@@ -305,10 +305,10 @@ def _(df_sd, mo, plt):
 
 
 @app.cell
-def _(Path, df_demand, df_sd, io, mo, pd, selected_scenario):
+def _(Path, df_demand, df_sd, io, mo, os, pd, selected_scenario):
     mo.md("## 4 – Excel export")
 
-    export_dir = Path(__file__).resolve().parent.parent / "output"
+    export_dir = Path(os.environ.get("RAUMPROG_EXPORT_DIR", "output")).resolve()
     export_dir.mkdir(parents=True, exist_ok=True)
     export_path = export_dir / f"raumprognose_{selected_scenario}.xlsx"
 
