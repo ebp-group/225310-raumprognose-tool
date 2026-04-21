@@ -29,6 +29,9 @@ run_pipeline = "scripts.run_pipeline:main"
 packages = ["app", "scripts"]
 py-modules = ["__init__"] # dash, not underscore
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
 [tool.black]
 line-length = 88
 target-version = ["py310"]
