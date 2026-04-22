@@ -108,59 +108,45 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
     """Line chart with one line per category over time."""
     fig, ax = plt.subplots(figsize=(8, 4))
 
-    if {"Jahr", "Kategorie", "Anzahl"}.issubset(df_studierende.columns):
-        chart_df = (
-            df_studierende.pivot_table(
-                index="Jahr",
-                columns="Kategorie",
-                values="Anzahl",
-                aggfunc="sum",
-            )
-            .reset_index()
-            .sort_values("Jahr")
+    required_columns = {"Jahr", "Kategorie", "Anzahl"}
+    missing_columns = sorted(required_columns - set(df_studierende.columns))
+    if missing_columns:
+        raise ValueError(
+            "Studierenden-Daten müssen im Long-Format vorliegen "
+            f"(fehlende Spalten: {missing_columns})."
         )
-    else:
-        chart_df = df_studierende.sort_values("Jahr").copy()
 
-    def _series_for(category: str) -> pd.Series | None:
-        if category in chart_df.columns:
-            return chart_df[category]
+    chart_df = (
+        df_studierende.pivot_table(
+            index="Jahr",
+            columns="Kategorie",
+            values="Anzahl",
+            aggfunc="sum",
+        )
+        .reset_index()
+        .sort_values("Jahr")
+    )
 
-        fallback_columns: dict[str, list[str]] = {
-            "Studierende": ["Studierende"],
-            "Forschung": ["Forschung_Monatslohn", "Forschung_Stundenlohn"],
-            "Services": ["Services_Monatslohn", "Services_Stundenlohn"],
-            "Stundenlohn": ["Forschung_Stundenlohn", "Services_Stundenlohn"],
-        }
-        cols = [c for c in fallback_columns.get(category, []) if c in chart_df.columns]
-        if not cols:
-            return None
-        return chart_df.loc[:, cols].sum(axis=1)
+    categories = ["Studierende", "Forschung", "Services", "Stundenlohn"]
+    palette = plt.get_cmap("tab10")
 
-    categories = [
-        ("Studierende", "#1f77b4"),
-        ("Forschung", "#2ca02c"),
-        ("Services", "#ff7f0e"),
-        ("Stundenlohn", "#d62728"),
-    ]
-
-    for label, color in categories:
-        values = _series_for(label)
-        if values is None:
+    for idx, label in enumerate(categories):
+        if label not in chart_df.columns:
             continue
         ax.plot(
             chart_df["Jahr"],
-            values,
+            chart_df[label],
             marker="o",
             linewidth=2,
             label=label,
-            color=color,
+            color=palette(idx % palette.N),
         )
 
     ax.set_xlabel("Jahr")
     ax.set_ylabel("Anzahl")
     ax.set_title("Entwicklung nach Kategorie")
-    ax.legend()
+    if ax.lines:
+        ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     return fig
