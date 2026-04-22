@@ -9,7 +9,6 @@ short-lived in-memory DuckDB connection and runs SQL for the computation.
 from __future__ import annotations
 
 import duckdb
-import numpy as np
 import pandas as pd
 
 
@@ -64,17 +63,31 @@ def future_demand(
 
     SQL equivalent::
 
+        -- UNPIVOT studierende to long form, then join faktoren and apply
+        -- step rounding with CEIL before multiplying by the area factor.
         SELECT f."Nutzungsart", s."Jahr",
-               s."Studierende" * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
-        FROM studierende AS s
-        CROSS JOIN (
-            SELECT "Nutzungsart", "Faktor_m2_pro_Person"
+               CASE
+                   WHEN f."Schritt" IS NOT NULL AND f."Schritt" > 0
+                   THEN CEIL(CAST(s.reference_value AS DOUBLE) / f."Schritt")
+                        * f."Schritt"
+                   ELSE CAST(s.reference_value AS DOUBLE)
+               END * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
+        FROM (
+            UNPIVOT studierende
+            ON <bezug_spalten>        -- column list built from df_faktoren["Bezug"]
+            INTO NAME "Bezug"
+                 VALUE reference_value
+        ) AS s
+        JOIN (
+            SELECT "Nutzungsart", "Faktor_m2_pro_Person", "Bezug", "Schritt"
             FROM faktoren
             WHERE "Szenario" = ?
-        ) AS f
+        ) AS f ON s."Bezug" = f."Bezug"
         ORDER BY f."Nutzungsart", s."Jahr"
     """
-    df_faktoren_szenario = df_faktoren[df_faktoren["Szenario"] == szenario].copy()
+    # Validate early in Python so we can produce clear error messages before
+    # handing off to DuckDB (SQL cannot inspect column names of the input table).
+    df_faktoren_szenario = df_faktoren[df_faktoren["Szenario"] == szenario]
     if df_faktoren_szenario.empty:
         return pd.DataFrame(columns=["Nutzungsart", "Jahr", "Bedarf_m2"])
 
@@ -90,45 +103,37 @@ def future_demand(
             f"{missing_bezug_columns}"
         )
 
-    df_studierende_long = df_studierende.melt(
-        id_vars=["Jahr"],
-        value_vars=sorted(bezug_values),
-        var_name="Bezug",
-        value_name="reference_value",
-    )
+    # Build the UNPIVOT column list from the validated Bezug values.
+    unpivot_cols = ", ".join(f'"{c}"' for c in sorted(bezug_values))
 
-    df_joined = df_studierende_long.merge(
-        df_faktoren_szenario[
-            ["Nutzungsart", "Faktor_m2_pro_Person", "Bezug", "Schritt"]
-        ],
-        on="Bezug",
-        how="inner",
-    )
-
-    step = pd.to_numeric(df_joined["Schritt"], errors="coerce")
-    reference_value = pd.to_numeric(df_joined["reference_value"], errors="coerce")
-    invalid_step = df_joined["Schritt"].notna() & step.isna()
-    invalid_reference_value = (
-        df_joined["reference_value"].notna() & reference_value.isna()
-    )
-    if invalid_step.any():
-        raise ValueError("Ungültige numerische Werte in 'Schritt'.")
-    if invalid_reference_value.any():
-        raise ValueError("Ungültige numerische Werte in der Bezugsspalte.")
-
-    has_step = step.notna() & (step > 0)
-    rounded_reference_value = reference_value.copy()
-    rounded_reference_value.loc[has_step] = (
-        np.ceil(reference_value.loc[has_step] / step.loc[has_step]) * step.loc[has_step]
-    )
-
-    df_joined["Bedarf_m2"] = rounded_reference_value * df_joined["Faktor_m2_pro_Person"]
-
-    return (
-        df_joined[["Nutzungsart", "Jahr", "Bedarf_m2"]]
-        .sort_values(["Nutzungsart", "Jahr"])
-        .reset_index(drop=True)
-    )
+    with duckdb.connect(":memory:") as conn:
+        conn.register("studierende", df_studierende)
+        conn.register("faktoren", df_faktoren)
+        return conn.execute(
+            f"""
+            SELECT f."Nutzungsart", s."Jahr",
+                   CASE
+                       WHEN f."Schritt" IS NOT NULL AND f."Schritt" > 0
+                       THEN CEIL(CAST(s.reference_value AS DOUBLE) / f."Schritt")
+                            * f."Schritt"
+                       ELSE CAST(s.reference_value AS DOUBLE)
+                   END * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
+            FROM (
+                UNPIVOT studierende
+                ON {unpivot_cols}
+                INTO
+                    NAME "Bezug"
+                    VALUE reference_value
+            ) AS s
+            JOIN (
+                SELECT "Nutzungsart", "Faktor_m2_pro_Person", "Bezug", "Schritt"
+                FROM faktoren
+                WHERE "Szenario" = ?
+            ) AS f ON s."Bezug" = f."Bezug"
+            ORDER BY f."Nutzungsart", s."Jahr"
+            """,
+            [szenario],
+        ).fetchdf()
 
 
 def surplus_deficit(
