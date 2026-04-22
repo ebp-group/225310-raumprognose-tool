@@ -112,9 +112,7 @@ def future_demand(
         ~has_step, np.ceil(reference_value / step) * step
     )
 
-    df_joined["Bedarf_m2"] = (
-        rounded_reference_value * df_joined["Faktor_m2_pro_Person"]
-    )
+    df_joined["Bedarf_m2"] = rounded_reference_value * df_joined["Faktor_m2_pro_Person"]
 
     return (
         df_joined[["Nutzungsart", "Jahr", "Bedarf_m2"]]
