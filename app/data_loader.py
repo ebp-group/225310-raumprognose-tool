@@ -16,7 +16,7 @@ from utils import get_in_memory_connection, query_to_dataframe
 _DATA_DIR = Path(__file__).parent.parent / "data"
 
 _GEBAEUDE_COLS = {"Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche m²", "Betriebsaufnahme", "Betriebsende"}
-_STUDIERENDE_COLS = {"jahr", "anzahl_studierende", "anzahl_forschung_monatslohn", "anzahl_services_monatslohn", "anzahl_forschung_studenlohn", "anzahl_services_stundenlohn"}
+_STUDIERENDE_COLS = {"Jahr", "Anzahl", "Beschreibung", "Kategorie"}
 _NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_person", "schritt", "bezug"}
 
 
@@ -82,22 +82,10 @@ def load_studierende(
         ValueError: If required columns are missing.
     """
     df = pd.read_excel(source, engine="openpyxl")
-    df["jahr"] = df["jahr"].astype(int)
-    df["anzahl_studierende"] = df["anzahl_studierende"].round(0).astype(int)
-    df["anzahl_forschung_monatslohn"] = df["anzahl_forschung_monatslohn"].round(0).astype(int)
-    df["anzahl_services_monatslohn"] = df["anzahl_services_monatslohn"].round(0).astype(int)
-    df["anzahl_forschung_studenlohn"] = df["anzahl_forschung_studenlohn"].round(0).astype(int)
-    df["anzahl_services_stundenlohn"] = df["anzahl_services_stundenlohn"].round(0).astype(int)
+    df["Jahr"] = df["Jahr"].astype(int)
+    df["Anzahl"] = df["Anzahl"].round(0).astype(int)
     _validate_columns(df, _STUDIERENDE_COLS,  os.path.basename(source))
 
-    df = df.rename(columns={
-        "jahr": "Jahr",
-        "anzahl_studierende": "Studierende",
-        "anzahl_forschung_monatslohn": "Forschung_Monatslohn",
-        "anzahl_services_monatslohn": "Services_Monatslohn",
-        "anzahl_forschung_studenlohn": "Forschung_Stundenlohn",
-        "anzahl_services_stundenlohn": "Services_Stundenlohn",
-    })
     return df
 
 
