@@ -125,15 +125,17 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
     def _series_for(category: str) -> pd.Series | None:
         if category in chart_df.columns:
             return chart_df[category]
-        contains = category.lower()
-        matches = [
-            c
-            for c in chart_df.columns
-            if c != "Jahr" and contains in str(c).lower()
-        ]
-        if not matches:
+
+        fallback_columns: dict[str, list[str]] = {
+            "Studierende": ["Studierende"],
+            "Forschung": ["Forschung_Monatslohn", "Forschung_Stundenlohn"],
+            "Services": ["Services_Monatslohn", "Services_Stundenlohn"],
+            "Stundenlohn": ["Forschung_Stundenlohn", "Services_Stundenlohn"],
+        }
+        cols = [c for c in fallback_columns.get(category, []) if c in chart_df.columns]
+        if not cols:
             return None
-        return chart_df.loc[:, matches].sum(axis=1)
+        return chart_df.loc[:, cols].sum(axis=1)
 
     categories = [
         ("Studierende", "#1f77b4"),
