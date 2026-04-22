@@ -105,18 +105,59 @@ def _fig_to_base64(fig: plt.Figure) -> str:
 
 
 def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
-    """Line chart of student numbers over time."""
+    """Line chart with one line per category over time."""
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(
-        df_studierende["Jahr"],
-        df_studierende["Studierende"],
-        marker="o",
-        linewidth=2,
-        color="#1f77b4",
-    )
+
+    if {"Jahr", "Kategorie", "Anzahl"}.issubset(df_studierende.columns):
+        chart_df = (
+            df_studierende.pivot_table(
+                index="Jahr",
+                columns="Kategorie",
+                values="Anzahl",
+                aggfunc="sum",
+            )
+            .reset_index()
+            .sort_values("Jahr")
+        )
+    else:
+        chart_df = df_studierende.sort_values("Jahr").copy()
+
+    def _series_for(category: str, contains: str) -> pd.Series | None:
+        if category in chart_df.columns:
+            return chart_df[category]
+        matches = [
+            c
+            for c in chart_df.columns
+            if c != "Jahr" and contains.lower() in str(c).lower()
+        ]
+        if not matches:
+            return None
+        return chart_df[matches].sum(axis=1)
+
+    categories = [
+        ("Studierende", "studierende", "#1f77b4"),
+        ("Forschung", "forschung", "#2ca02c"),
+        ("Services", "services", "#ff7f0e"),
+        ("Stundenlohn", "stundenlohn", "#d62728"),
+    ]
+
+    for label, contains, color in categories:
+        values = _series_for(label, contains)
+        if values is None:
+            continue
+        ax.plot(
+            chart_df["Jahr"],
+            values,
+            marker="o",
+            linewidth=2,
+            label=label,
+            color=color,
+        )
+
     ax.set_xlabel("Jahr")
-    ax.set_ylabel("Studierende")
-    ax.set_title("Entwicklung der Studierendenzahlen")
+    ax.set_ylabel("Anzahl")
+    ax.set_title("Entwicklung nach Kategorie")
+    ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     return fig
@@ -658,7 +699,7 @@ def main(page: ft.Page) -> None:
         tab3 = ft.Column(
             controls=[
                 ft.Text(
-                    "Studierendenzahlen im Zeitverlauf",
+                    "Studierendenzahlen & Kategorien im Zeitverlauf",
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
