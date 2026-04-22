@@ -129,7 +129,7 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
         matches = [
             c
             for c in chart_df.columns
-            if c != "Jahr" and contains.lower() in str(c).lower()
+            if c != "Jahr" and contains in str(c).lower()
         ]
         if not matches:
             return None
