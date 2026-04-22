@@ -89,7 +89,7 @@ def future_demand(
     df_studierende_long = df_studierende.melt(
         id_vars=["Jahr"],
         var_name="Bezug",
-        value_name="_bezugswert",
+        value_name="reference_value",
     )
     df_studierende_long = df_studierende_long[df_studierende_long["Bezug"].isin(bezug_values)]
 
@@ -102,11 +102,15 @@ def future_demand(
     )
 
     step = pd.to_numeric(df_joined["Schritt"], errors="coerce")
-    bezugswert = pd.to_numeric(df_joined["_bezugswert"], errors="coerce")
+    reference_value = pd.to_numeric(df_joined["reference_value"], errors="coerce")
     has_step = step.notna() & (step > 0)
-    gerundet = bezugswert.where(~has_step, np.ceil(bezugswert / step) * step)
+    rounded_reference_value = reference_value.where(
+        ~has_step, np.ceil(reference_value / step) * step
+    )
 
-    df_joined["Bedarf_m2"] = gerundet * df_joined["Faktor_m2_pro_Person"]
+    df_joined["Bedarf_m2"] = (
+        rounded_reference_value * df_joined["Faktor_m2_pro_Person"]
+    )
 
     return (
         df_joined[["Nutzungsart", "Jahr", "Bedarf_m2"]]
