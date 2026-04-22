@@ -109,7 +109,7 @@ def future_demand(
         conn.register("studierende", df_studierende)
         conn.register("faktoren", df_faktoren)
         return conn.execute(
-            f"""
+            """
             SELECT f."Nutzungsart", s."Jahr",
                    CASE
                        WHEN f."Schritt" IS NOT NULL AND f."Schritt" > 0

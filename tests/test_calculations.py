@@ -34,7 +34,6 @@ def test_future_demand_filters_scenario_and_calculates_cross_product() -> None:
         {
             "Jahr": [2030, 2040],
             "Anzahl": [1000, 1200],
-            "Beschreibung": ["Studierende", "Studierende"],
             "Kategorie": ["Studierende", "Studierende"],
         }
     )
@@ -65,12 +64,6 @@ def test_future_demand_uses_bezug_and_rounds_by_schritt() -> None:
         {
             "Jahr": [2030, 2030, 2040, 2040],
             "Anzahl": [3200, 1500, 6100, 3100],
-            "Beschreibung": [
-                "Studierende",
-                "Services Monatslohn",
-                "Studierende",
-                "Services Monatslohn",
-            ],
             "Kategorie": [
                 "Studierende",
                 "Services_Monatslohn",
@@ -106,7 +99,6 @@ def test_future_demand_raises_error_for_unknown_bezug_column() -> None:
         {
             "Jahr": [2030],
             "Anzahl": [1000],
-            "Beschreibung": ["Studierende"],
             "Kategorie": ["Studierende"],
         }
     )
