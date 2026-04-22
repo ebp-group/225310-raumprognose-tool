@@ -105,18 +105,48 @@ def _fig_to_base64(fig: plt.Figure) -> str:
 
 
 def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
-    """Line chart of student numbers over time."""
+    """Line chart with one line per category over time."""
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(
-        df_studierende["Jahr"],
-        df_studierende["Studierende"],
-        marker="o",
-        linewidth=2,
-        color="#1f77b4",
+
+    required_columns = {"Jahr", "Kategorie", "Anzahl"}
+    missing_columns = sorted(required_columns - set(df_studierende.columns))
+    if missing_columns:
+        raise ValueError(
+            "Studierenden-Daten müssen im Long-Format vorliegen "
+            f"(fehlende Spalten: {missing_columns})."
+        )
+
+    chart_df = (
+        df_studierende.pivot_table(
+            index="Jahr",
+            columns="Kategorie",
+            values="Anzahl",
+            aggfunc="sum",
+        )
+        .reset_index()
+        .sort_values("Jahr")
     )
+
+    categories = ["Studierende", "Forschung", "Services", "Stundenlohn"]
+    palette = plt.get_cmap("tab10")
+
+    for idx, label in enumerate(categories):
+        if label not in chart_df.columns:
+            continue
+        ax.plot(
+            chart_df["Jahr"],
+            chart_df[label],
+            marker="o",
+            linewidth=2,
+            label=label,
+            color=palette(idx % palette.N),
+        )
+
     ax.set_xlabel("Jahr")
-    ax.set_ylabel("Studierende")
-    ax.set_title("Entwicklung der Studierendenzahlen")
+    ax.set_ylabel("Anzahl")
+    ax.set_title("Entwicklung nach Kategorie")
+    if ax.lines:
+        ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     return fig
@@ -658,7 +688,7 @@ def main(page: ft.Page) -> None:
         tab3 = ft.Column(
             controls=[
                 ft.Text(
-                    "Studierendenzahlen im Zeitverlauf",
+                    "Studierendenzahlen & Kategorien im Zeitverlauf",
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
