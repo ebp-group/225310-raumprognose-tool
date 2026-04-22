@@ -51,8 +51,8 @@ def future_demand(
         ``Rundungswert(Bezugsspalte, Schritt) × Faktor_m2_pro_Person``
 
     Args:
-        df_studierende: Student-numbers DataFrame with column ``Jahr`` and
-            one or more measure columns referenced by ``Bezug``.
+        df_studierende: Student/person-numbers DataFrame in long format with
+            columns ``Jahr``, ``Kategorie`` and ``Anzahl``.
         df_faktoren: Usage-factors DataFrame with columns ``Szenario``,
             ``Nutzungsart``, ``Faktor_m2_pro_Person``, ``Bezug``,
             ``Schritt``.
@@ -63,30 +63,31 @@ def future_demand(
 
     SQL equivalent::
 
-        -- UNPIVOT studierende to long form, then join faktoren and apply
-        -- step rounding with CEIL before multiplying by the area factor.
         SELECT f."Nutzungsart", s."Jahr",
                CASE
                    WHEN f."Schritt" IS NOT NULL AND f."Schritt" > 0
-                   THEN CEIL(CAST(s.reference_value AS DOUBLE) / f."Schritt")
+                   THEN CEIL(CAST(s."Anzahl" AS DOUBLE) / f."Schritt")
                         * f."Schritt"
-                   ELSE CAST(s.reference_value AS DOUBLE)
-               END * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
-        FROM (
-            UNPIVOT studierende
-            ON <bezug_spalten>        -- column list built from df_faktoren["Bezug"]
-            INTO NAME "Bezug"
-                 VALUE reference_value
-        ) AS s
+                   ELSE CAST(s."Anzahl" AS DOUBLE)
+                END * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
+        FROM studierende AS s
         JOIN (
             SELECT "Nutzungsart", "Faktor_m2_pro_Person", "Bezug", "Schritt"
             FROM faktoren
             WHERE "Szenario" = ?
-        ) AS f ON s."Bezug" = f."Bezug"
+        ) AS f ON s."Kategorie" = f."Bezug"
         ORDER BY f."Nutzungsart", s."Jahr"
     """
+    required_stud_cols = {"Jahr", "Kategorie", "Anzahl"}
+    missing_stud_cols = sorted(required_stud_cols - set(df_studierende.columns))
+    if missing_stud_cols:
+        raise ValueError(
+            "Folgende Spalten fehlen in den Studierenden-Daten: "
+            f"{missing_stud_cols}"
+        )
+
     # Validate early in Python so we can produce clear error messages before
-    # handing off to DuckDB (SQL cannot inspect column names of the input table).
+    # handing off to DuckDB.
     df_faktoren_szenario = df_faktoren[df_faktoren["Szenario"] == szenario]
     if df_faktoren_szenario.empty:
         return pd.DataFrame(columns=["Nutzungsart", "Jahr", "Bedarf_m2"])
@@ -96,40 +97,32 @@ def future_demand(
         raise ValueError(
             f"Im Szenario '{szenario}' sind keine gültigen Bezug-Werte vorhanden."
         )
-    missing_bezug_columns = sorted(bezug_values - set(df_studierende.columns))
-    if missing_bezug_columns:
+    studierende_kategorien = set(df_studierende["Kategorie"].dropna().unique())
+    missing_bezug_kategorien = sorted(bezug_values - studierende_kategorien)
+    if missing_bezug_kategorien:
         raise ValueError(
-            "Folgende Bezug-Spalten fehlen in den Studierenden-Daten: "
-            f"{missing_bezug_columns}"
+            "Folgende Bezug-Kategorien fehlen in den Studierenden-Daten: "
+            f"{missing_bezug_kategorien}"
         )
-
-    # Build the UNPIVOT column list from the validated Bezug values.
-    unpivot_cols = ", ".join(f'"{c}"' for c in sorted(bezug_values))
 
     with duckdb.connect(":memory:") as conn:
         conn.register("studierende", df_studierende)
         conn.register("faktoren", df_faktoren)
         return conn.execute(
-            f"""
+            """
             SELECT f."Nutzungsart", s."Jahr",
                    CASE
                        WHEN f."Schritt" IS NOT NULL AND f."Schritt" > 0
-                       THEN CEIL(CAST(s.reference_value AS DOUBLE) / f."Schritt")
+                       THEN CEIL(CAST(s."Anzahl" AS DOUBLE) / f."Schritt")
                             * f."Schritt"
-                       ELSE CAST(s.reference_value AS DOUBLE)
+                       ELSE CAST(s."Anzahl" AS DOUBLE)
                    END * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
-            FROM (
-                UNPIVOT studierende
-                ON {unpivot_cols}
-                INTO
-                    NAME "Bezug"
-                    VALUE reference_value
-            ) AS s
+            FROM studierende AS s
             JOIN (
                 SELECT "Nutzungsart", "Faktor_m2_pro_Person", "Bezug", "Schritt"
                 FROM faktoren
                 WHERE "Szenario" = ?
-            ) AS f ON s."Bezug" = f."Bezug"
+            ) AS f ON s."Kategorie" = f."Bezug"
             ORDER BY f."Nutzungsart", s."Jahr"
             """,
             [szenario],
