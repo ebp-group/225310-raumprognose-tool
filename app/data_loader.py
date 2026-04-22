@@ -17,7 +17,7 @@ _DATA_DIR = Path(__file__).parent.parent / "data"
 
 _GEBAEUDE_COLS = {"Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche m²", "Betriebsaufnahme", "Betriebsende"}
 _STUDIERENDE_COLS = {"jahr", "anzahl_studierende", "anzahl_forschung_monatslohn", "anzahl_services_monatslohn", "anzahl_forschung_studenlohn", "anzahl_services_stundenlohn"}
-_NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_person", "schritt"}
+_NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_person", "schritt", "bezug"}
 
 
 FileSource = str | Path | IO[bytes]
@@ -124,5 +124,6 @@ def load_nutzungsfaktoren(
         "nutzungsart": "Nutzungsart",
         "faktor_m2_pro_person": "Faktor_m2_pro_Person",
         "schritt": "Schritt",
+        "bezug": "Bezug",
     })
     return df
