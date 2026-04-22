@@ -105,11 +105,21 @@ def future_demand(
         how="inner",
     )
 
-    step = pd.to_numeric(df_joined["Schritt"], errors="raise")
-    reference_value = pd.to_numeric(df_joined["reference_value"], errors="raise")
+    step = pd.to_numeric(df_joined["Schritt"], errors="coerce")
+    reference_value = pd.to_numeric(df_joined["reference_value"], errors="coerce")
+    invalid_step = df_joined["Schritt"].notna() & step.isna()
+    invalid_reference_value = (
+        df_joined["reference_value"].notna() & reference_value.isna()
+    )
+    if invalid_step.any():
+        raise ValueError("Ungültige numerische Werte in 'Schritt'.")
+    if invalid_reference_value.any():
+        raise ValueError("Ungültige numerische Werte in der Bezugsspalte.")
+
     has_step = step.notna() & (step > 0)
-    rounded_reference_value = reference_value.where(
-        ~has_step, np.ceil(reference_value / step) * step
+    rounded_reference_value = reference_value.copy()
+    rounded_reference_value.loc[has_step] = (
+        np.ceil(reference_value.loc[has_step] / step.loc[has_step]) * step.loc[has_step]
     )
 
     df_joined["Bedarf_m2"] = rounded_reference_value * df_joined["Faktor_m2_pro_Person"]
