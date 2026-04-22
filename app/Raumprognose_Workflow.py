@@ -169,30 +169,22 @@ def _(df_faktoren, df_studierende, future_demand, mo, scenario_selector):
         mo.md(f"""
 **SQL (DuckDB)** – Szenario: `{selected_scenario}`
 ```sql
--- <bezug_spalten> is the comma-separated list of columns referenced by
--- "Bezug" in nutzungsfaktoren (e.g. "Studierende", "Services_Monatslohn").
 SELECT f."Nutzungsart", s."Jahr",
        CASE
            WHEN f."Schritt" IS NOT NULL AND f."Schritt" > 0
-           THEN CEIL(CAST(s.reference_value AS DOUBLE) / f."Schritt")
+           THEN CEIL(CAST(s."Anzahl" AS DOUBLE) / f."Schritt")
                 * f."Schritt"
-           ELSE CAST(s.reference_value AS DOUBLE)
+           ELSE CAST(s."Anzahl" AS DOUBLE)
        END * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
-FROM (
-    UNPIVOT studierende
-    ON <bezug_spalten>
-    INTO
-        NAME "Bezug"
-        VALUE reference_value
-) AS s
+FROM studierende AS s
 JOIN (
     SELECT "Nutzungsart", "Faktor_m2_pro_Person", "Bezug", "Schritt"
     FROM nutzungsfaktoren
     WHERE "Szenario" = '{selected_scenario}'
-) AS f ON s."Bezug" = f."Bezug"
+) AS f ON s."Kategorie" = f."Bezug"
 ORDER BY f."Nutzungsart", s."Jahr"
 ```
-*(Der UNPIVOT-Schritt überführt die breite Studierenden-Tabelle in eine Langform; CEIL rundet den Bezugswert auf das nächste Vielfache von „Schritt" auf, bevor mit dem Faktor multipliziert wird.)*
+*(Die Studierenden-Tabelle liegt bereits in Langform vor; `Kategorie` wird direkt mit `Bezug` verknüpft. CEIL rundet den Bezugswert auf das nächste Vielfache von „Schritt" auf, bevor mit dem Faktor multipliziert wird.)*
 """),
         mo.ui.table(df_demand),
     ])

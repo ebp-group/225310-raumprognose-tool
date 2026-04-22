@@ -33,7 +33,9 @@ def test_future_demand_filters_scenario_and_calculates_cross_product() -> None:
     df_studierende = pd.DataFrame(
         {
             "Jahr": [2030, 2040],
-            "Studierende": [1000, 1200],
+            "Anzahl": [1000, 1200],
+            "Beschreibung": ["Studierende", "Studierende"],
+            "Kategorie": ["Studierende", "Studierende"],
         }
     )
     df_faktoren = pd.DataFrame(
@@ -61,9 +63,20 @@ def test_future_demand_filters_scenario_and_calculates_cross_product() -> None:
 def test_future_demand_uses_bezug_and_rounds_by_schritt() -> None:
     df_studierende = pd.DataFrame(
         {
-            "Jahr": [2030, 2040],
-            "Studierende": [3200, 6100],
-            "Services_Monatslohn": [1500, 3100],
+            "Jahr": [2030, 2030, 2040, 2040],
+            "Anzahl": [3200, 1500, 6100, 3100],
+            "Beschreibung": [
+                "Studierende",
+                "Services Monatslohn",
+                "Studierende",
+                "Services Monatslohn",
+            ],
+            "Kategorie": [
+                "Studierende",
+                "Services_Monatslohn",
+                "Studierende",
+                "Services_Monatslohn",
+            ],
         }
     )
     df_faktoren = pd.DataFrame(
@@ -92,7 +105,9 @@ def test_future_demand_raises_error_for_unknown_bezug_column() -> None:
     df_studierende = pd.DataFrame(
         {
             "Jahr": [2030],
-            "Studierende": [1000],
+            "Anzahl": [1000],
+            "Beschreibung": ["Studierende"],
+            "Kategorie": ["Studierende"],
         }
     )
     df_faktoren = pd.DataFrame(
@@ -105,7 +120,7 @@ def test_future_demand_raises_error_for_unknown_bezug_column() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="Bezug-Spalten"):
+    with pytest.raises(ValueError, match="Bezug-Kategorien"):
         future_demand(df_studierende, df_faktoren, "Basis")
 
 
