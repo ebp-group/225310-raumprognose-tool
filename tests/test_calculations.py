@@ -1,5 +1,6 @@
 import pandas as pd
 from pandas.testing import assert_frame_equal
+import pytest
 
 from app.calculations import (
     current_area_by_nutzungsart,
@@ -40,6 +41,8 @@ def test_future_demand_filters_scenario_and_calculates_cross_product() -> None:
             "Szenario": ["Basis", "Basis", "Digital"],
             "Nutzungsart": ["Seminar", "Labor", "Seminar"],
             "Faktor_m2_pro_Person": [2.0, 1.5, 1.2],
+            "Bezug": ["Studierende", "Studierende", "Studierende"],
+            "Schritt": [None, None, None],
         }
     )
 
@@ -53,6 +56,57 @@ def test_future_demand_filters_scenario_and_calculates_cross_product() -> None:
         }
     )
     assert_frame_equal(result, expected)
+
+
+def test_future_demand_uses_bezug_and_rounds_by_schritt() -> None:
+    df_studierende = pd.DataFrame(
+        {
+            "Jahr": [2030, 2040],
+            "Studierende": [3200, 6100],
+            "Services_Monatslohn": [1500, 3100],
+        }
+    )
+    df_faktoren = pd.DataFrame(
+        {
+            "Szenario": ["Basis", "Basis"],
+            "Nutzungsart": ["Seminar", "Labor"],
+            "Faktor_m2_pro_Person": [1.0, 2.0],
+            "Bezug": ["Studierende", "Services_Monatslohn"],
+            "Schritt": [3000, 3000],
+        }
+    )
+
+    result = future_demand(df_studierende, df_faktoren, "Basis")
+
+    expected = pd.DataFrame(
+        {
+            "Nutzungsart": ["Labor", "Labor", "Seminar", "Seminar"],
+            "Jahr": [2030, 2040, 2030, 2040],
+            "Bedarf_m2": [6000.0, 12000.0, 6000.0, 9000.0],
+        }
+    )
+    assert_frame_equal(result, expected)
+
+
+def test_future_demand_raises_error_for_unknown_bezug_column() -> None:
+    df_studierende = pd.DataFrame(
+        {
+            "Jahr": [2030],
+            "Studierende": [1000],
+        }
+    )
+    df_faktoren = pd.DataFrame(
+        {
+            "Szenario": ["Basis"],
+            "Nutzungsart": ["Seminar"],
+            "Faktor_m2_pro_Person": [2.0],
+            "Bezug": ["NichtVorhanden"],
+            "Schritt": [None],
+        }
+    )
+
+    with pytest.raises(ValueError, match="Bezug-Spalten"):
+        future_demand(df_studierende, df_faktoren, "Basis")
 
 
 def test_surplus_deficit_merges_current_and_demand_and_computes_difference() -> None:

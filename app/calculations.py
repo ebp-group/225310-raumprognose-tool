@@ -9,6 +9,7 @@ short-lived in-memory DuckDB connection and runs SQL for the computation.
 from __future__ import annotations
 
 import duckdb
+import numpy as np
 import pandas as pd
 
 
@@ -48,13 +49,14 @@ def future_demand(
     """Calculate future room demand (m²) per usage type and forecast year.
 
     For each (year, usage-type) combination the demand is:
-        ``Studierende × Faktor_m2_pro_Person``
+        ``Rundungswert(Bezugsspalte, Schritt) × Faktor_m2_pro_Person``
 
     Args:
-        df_studierende: Student-numbers DataFrame with columns ``Jahr`` and
-            ``Studierende``.
+        df_studierende: Student-numbers DataFrame with column ``Jahr`` and
+            one or more measure columns referenced by ``Bezug``.
         df_faktoren: Usage-factors DataFrame with columns ``Szenario``,
-            ``Nutzungsart``, ``Faktor_m2_pro_Person``.
+            ``Nutzungsart``, ``Faktor_m2_pro_Person``, ``Bezug``,
+            ``Schritt``.
         szenario: The scenario name to use for filtering *df_faktoren*.
 
     Returns:
@@ -72,23 +74,45 @@ def future_demand(
         ) AS f
         ORDER BY f."Nutzungsart", s."Jahr"
     """
-    with duckdb.connect(":memory:") as conn:
-        conn.register("studierende", df_studierende)
-        conn.register("faktoren", df_faktoren)
-        return conn.execute(
-            """
-            SELECT f."Nutzungsart", s."Jahr",
-                   s."Studierende" * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
-            FROM studierende AS s
-            CROSS JOIN (
-                SELECT "Nutzungsart", "Faktor_m2_pro_Person"
-                FROM faktoren
-                WHERE "Szenario" = ?
-            ) AS f
-            ORDER BY f."Nutzungsart", s."Jahr"
-            """,
-            [szenario],
-        ).fetchdf()
+    df_faktoren_szenario = df_faktoren[df_faktoren["Szenario"] == szenario].copy()
+    if df_faktoren_szenario.empty:
+        return pd.DataFrame(columns=["Nutzungsart", "Jahr", "Bedarf_m2"])
+
+    bezug_values = set(df_faktoren_szenario["Bezug"].dropna().unique())
+    missing_bezug_columns = sorted(bezug_values - set(df_studierende.columns))
+    if missing_bezug_columns:
+        raise ValueError(
+            "Folgende Bezug-Spalten fehlen in den Studierenden-Daten: "
+            f"{missing_bezug_columns}"
+        )
+
+    df_studierende_long = df_studierende.melt(
+        id_vars=["Jahr"],
+        var_name="Bezug",
+        value_name="_bezugswert",
+    )
+    df_studierende_long = df_studierende_long[df_studierende_long["Bezug"].isin(bezug_values)]
+
+    df_joined = df_studierende_long.merge(
+        df_faktoren_szenario[
+            ["Nutzungsart", "Faktor_m2_pro_Person", "Bezug", "Schritt"]
+        ],
+        on="Bezug",
+        how="inner",
+    )
+
+    step = pd.to_numeric(df_joined["Schritt"], errors="coerce")
+    bezugswert = pd.to_numeric(df_joined["_bezugswert"], errors="coerce")
+    has_step = step.notna() & (step > 0)
+    gerundet = bezugswert.where(~has_step, np.ceil(bezugswert / step) * step)
+
+    df_joined["Bedarf_m2"] = gerundet * df_joined["Faktor_m2_pro_Person"]
+
+    return (
+        df_joined[["Nutzungsart", "Jahr", "Bedarf_m2"]]
+        .sort_values(["Nutzungsart", "Jahr"])
+        .reset_index(drop=True)
+    )
 
 
 def surplus_deficit(
