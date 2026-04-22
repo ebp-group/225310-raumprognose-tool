@@ -122,9 +122,10 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
     else:
         chart_df = df_studierende.sort_values("Jahr").copy()
 
-    def _series_for(category: str, contains: str) -> pd.Series | None:
+    def _series_for(category: str) -> pd.Series | None:
         if category in chart_df.columns:
             return chart_df[category]
+        contains = category.lower()
         matches = [
             c
             for c in chart_df.columns
@@ -132,17 +133,17 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
         ]
         if not matches:
             return None
-        return chart_df[matches].sum(axis=1)
+        return chart_df.loc[:, matches].sum(axis=1)
 
     categories = [
-        ("Studierende", "studierende", "#1f77b4"),
-        ("Forschung", "forschung", "#2ca02c"),
-        ("Services", "services", "#ff7f0e"),
-        ("Stundenlohn", "stundenlohn", "#d62728"),
+        ("Studierende", "#1f77b4"),
+        ("Forschung", "#2ca02c"),
+        ("Services", "#ff7f0e"),
+        ("Stundenlohn", "#d62728"),
     ]
 
-    for label, contains, color in categories:
-        values = _series_for(label, contains)
+    for label, color in categories:
+        values = _series_for(label)
         if values is None:
             continue
         ax.plot(
