@@ -79,6 +79,10 @@ def future_demand(
         return pd.DataFrame(columns=["Nutzungsart", "Jahr", "Bedarf_m2"])
 
     bezug_values = set(df_faktoren_szenario["Bezug"].dropna().unique())
+    if not bezug_values:
+        raise ValueError(
+            f"Im Szenario '{szenario}' sind keine gültigen Bezug-Werte vorhanden."
+        )
     missing_bezug_columns = sorted(bezug_values - set(df_studierende.columns))
     if missing_bezug_columns:
         raise ValueError(
@@ -88,10 +92,10 @@ def future_demand(
 
     df_studierende_long = df_studierende.melt(
         id_vars=["Jahr"],
+        value_vars=sorted(bezug_values),
         var_name="Bezug",
         value_name="reference_value",
     )
-    df_studierende_long = df_studierende_long[df_studierende_long["Bezug"].isin(bezug_values)]
 
     df_joined = df_studierende_long.merge(
         df_faktoren_szenario[
@@ -101,8 +105,8 @@ def future_demand(
         how="inner",
     )
 
-    step = pd.to_numeric(df_joined["Schritt"], errors="coerce")
-    reference_value = pd.to_numeric(df_joined["reference_value"], errors="coerce")
+    step = pd.to_numeric(df_joined["Schritt"], errors="raise")
+    reference_value = pd.to_numeric(df_joined["reference_value"], errors="raise")
     has_step = step.notna() & (step > 0)
     rounded_reference_value = reference_value.where(
         ~has_step, np.ceil(reference_value / step) * step
