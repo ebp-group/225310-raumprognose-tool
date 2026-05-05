@@ -29,6 +29,38 @@ def test_current_area_by_nutzungsart_groups_and_sorts() -> None:
     assert_frame_equal(result, expected)
 
 
+def test_future_demand_with_nutzungsart_and_kategorie_summe() -> None:
+    df_studierende = pd.DataFrame(
+        {
+            "Jahr": [2030, 2030, 2030, 2040, 2040, 2040],
+            "Anzahl": [250, 50, 100, 300, 60, 150],
+            "Kategorie": ["Forschung", "Forschung", "Services", "Forschung", "Forschung", "Services"],
+        }
+    )
+    df_faktoren = pd.DataFrame(
+        {
+            "Szenario": ["Herleitungsmodell 1", "Herleitungsmodell 1"],
+            "Nutzungsart": ["Büro", "Büro"],
+            "Faktor_m2_pro_Person": [0.6, 0.8],
+            "Bezug": ["Forschung", "Services"],
+            "Schritt": [1.0, 1.0],
+        }
+    )
+
+    result = future_demand(df_studierende, df_faktoren, "Herleitungsmodell 1")
+
+    print(result)
+
+    expected = pd.DataFrame(
+        {
+            "Nutzungsart": ["Büro", "Büro"],
+            "Jahr": [2030, 2040],
+            "Bedarf_m2": [180.0, 216.0],
+        }
+    )
+    assert_frame_equal(result, expected)
+
+
 def test_future_demand_filters_scenario_and_calculates_cross_product() -> None:
     df_studierende = pd.DataFrame(
         {

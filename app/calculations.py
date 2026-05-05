@@ -110,20 +110,24 @@ def future_demand(
         conn.register("faktoren", df_faktoren)
         return conn.execute(
             """
+            SELECT Nutzungsart, Jahr, sum(Bedarf_m2) AS Bedarf_m2
+            FROM ( 
             SELECT f."Nutzungsart", s."Jahr",
                    CASE
                        WHEN f."Schritt" IS NOT NULL AND f."Schritt" > 0
                        THEN CEIL(CAST(s."Anzahl" AS DOUBLE) / f."Schritt")
                             * f."Schritt"
                        ELSE CAST(s."Anzahl" AS DOUBLE)
-                   END * f."Faktor_m2_pro_Person" AS "Bedarf_m2"
+                   END * f."Faktor_m2_pro_Person" as "Bedarf_m2"
             FROM studierende AS s
             JOIN (
                 SELECT "Nutzungsart", "Faktor_m2_pro_Person", "Bezug", "Schritt"
                 FROM faktoren
                 WHERE "Szenario" = ?
             ) AS f ON s."Kategorie" = f."Bezug"
-            ORDER BY f."Nutzungsart", s."Jahr"
+            )
+            GROUP BY Nutzungsart, Jahr
+            ORDER BY Nutzungsart, Jahr
             """,
             [szenario],
         ).fetchdf()

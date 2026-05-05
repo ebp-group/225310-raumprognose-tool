@@ -190,6 +190,7 @@ def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[plt.Figure]:
     for year in years:
         fig, ax = plt.subplots(figsize=(5, 4))
         df_year = df_sd[df_sd["Jahr"] == year]
+        df_year = df_year.dropna(subset=["Differenz_m2"])
         colors = ["#2ecc71" if v >= 0 else "#e74c3c" for v in df_year["Differenz_m2"]]
         ax.bar(df_year["Nutzungsart"], df_year["Differenz_m2"], color=colors)
         ax.set_xlabel("Nutzungsart")
@@ -319,10 +320,10 @@ def main(page: ft.Page) -> None:
         "df_gebaeude": None,
         "df_studierende": None,
         "df_faktoren": None,
-        "scenario": "Basis",
-        "custom_gebaeude": (base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"),
-        "custom_studierende": (base_path / "prognose_studierende_und_ma.xlsx"),
-        "custom_faktoren": (base_path / "nutzungsfaktoren.xlsx"),
+        "scenario": None,
+        "custom_gebaeude": (base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"),   # TODO: default paths for testing only, remove later
+        "custom_studierende": (base_path / "prognose_studierende_und_ma.xlsx"),         # TODO: default paths for testing only, remove later
+        "custom_faktoren": (base_path / "nutzungsfaktoren.xlsx"),                       # TODO: default paths for testing only, remove later
     }
 
     # ── Data loading ──────────────────────────────────────────────────────
@@ -337,14 +338,28 @@ def main(page: ft.Page) -> None:
                 )
             )
             return False
+        
+        state["df_gebaeude"] = None
+        state["df_studierende"] = None
+        state["df_faktoren"] = None
+        
+        _update_scenario_options()
+        rebuild_content()
+        page.update()
         try:
             state["df_gebaeude"] = load_gebaeude_raeume(state["custom_gebaeude"])
             state["df_studierende"] = load_studierende(state["custom_studierende"])
             state["df_faktoren"] = load_nutzungsfaktoren(state["custom_faktoren"])
 
             _update_scenario_options()
-            rebuild_content()
             page.update()
+
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text("Daten erfolgreich geladen."),
+                    bgcolor=ft.Colors.GREEN_400,
+                )
+            )
             return True
         except Exception as exc:
             log.exception("Error loading data")
@@ -355,6 +370,19 @@ def main(page: ft.Page) -> None:
                 )
             )
             return False
+    
+    def run_calculations(e) -> None:
+        """Run the calculations and update the content."""
+        if state["df_gebaeude"] is None or state["df_studierende"] is None or state["df_faktoren"] is None:
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text("Bitte zuerst alle Daten laden."),
+                    bgcolor=ft.Colors.RED_400,
+                )
+            )
+            return
+        rebuild_content()
+        page.update()
 
     def get_results() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Return (current_area, demand, surplus_deficit) DataFrames."""
@@ -494,7 +522,7 @@ def main(page: ft.Page) -> None:
 
     content_area = ft.Container(expand=True, padding=0)
 
-    def rebuild_content():
+    def rebuild_content() -> None:
         """Rebuild all tab content from current state."""
         log.debug("Rebuilding content with scenario: %s", state["scenario"])
         log.debug("Factors data:\n%s", state["df_faktoren"])
@@ -506,7 +534,7 @@ def main(page: ft.Page) -> None:
             log.debug("Missing data, showing placeholder")
             content_area.content = ft.Container(
                 content=ft.Text(
-                    "Bitte zuerst Daten laden.",
+                    "Bitte zuerst Daten laden, Szenario wählen und berechnen.",
                     size=16,
                     color=ft.Colors.BLUE,
                 ),
@@ -588,6 +616,7 @@ def main(page: ft.Page) -> None:
             values="Differenz_m2",
             aggfunc="first",
         )
+        pivot = pivot.reindex(columns=[2026, 2030, 2040, 2050], fill_value=0)
         pivot.columns = [str(c) for c in pivot.columns]
 
         pivot_columns = [
@@ -629,13 +658,18 @@ def main(page: ft.Page) -> None:
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
 
-        df_sd_display = df_sd.rename(
+        df_sd_display = df_sd.copy()
+        df_sd_display["Fläche"] = df_sd_display["Fläche"].map("{:,.0f}".format).str.replace(",", "\'")
+        df_sd_display["Bedarf_m2"] = df_sd_display["Bedarf_m2"].map("{:,.0f}".format).str.replace(",", "\'")
+        df_sd_display["Differenz_m2"] = df_sd_display["Differenz_m2"].map("{:,.0f}".format).str.replace(",", "\'")
+        df_sd_display = df_sd_display.rename(
             columns={
                 "Fläche": "Ist-Fläche (m²)",
                 "Bedarf_m2": "Bedarf (m²)",
                 "Differenz_m2": "Differenz (m²)",
             }
         )
+        
 
         tab2 = ft.Column(
             [
@@ -677,13 +711,23 @@ def main(page: ft.Page) -> None:
         fig_demand = _create_demand_chart(df_demand, state["scenario"])
         sd_figs = _create_surplus_deficit_charts(df_sd)
 
-        sd_chart_controls = [
+        sd_chart_controls: list[ft.Control] = [
             ft.Container(
                 content=ft.Image(src=_fig_to_base64(fig)),
                 expand=True,
             )
             for fig in sd_figs
         ]
+
+        num_cols = 2
+        sd_chart_rows: list[ft.Control] = [
+            ft.Row(
+                controls=sd_chart_controls[i : i + num_cols],
+                spacing=16,
+            )
+            for i in range(0, len(sd_chart_controls), num_cols)
+        ]
+        sd_charts_column = ft.Column(controls=sd_chart_rows, spacing=16)
 
         tab3 = ft.Column(
             controls=[
@@ -712,7 +756,7 @@ def main(page: ft.Page) -> None:
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
-                ft.Row(cast(list[ft.Control], sd_chart_controls), spacing=8, wrap=True),
+                sd_charts_column,
             ],
             scroll=ft.ScrollMode.AUTO,
             spacing=16,
@@ -799,9 +843,6 @@ def main(page: ft.Page) -> None:
                     weight=ft.FontWeight.BOLD,
                 ),
                 ft.Divider(),
-                ft.Text("Szenario", weight=ft.FontWeight.BOLD),
-                scenario_dropdown,
-                ft.Divider(),
                 ft.Text(
                     "📂 Eigene Dateien laden",
                     weight=ft.FontWeight.BOLD,
@@ -828,10 +869,21 @@ def main(page: ft.Page) -> None:
                     width=220,
                 ),
                 faktoren_label,
+                ft.Container(
+                    content=ft.Button(
+                        "Daten laden",
+                        on_click=load_all_data,
+                        icon=ft.Icons.CALCULATE,
+                        width=220,
+                    ),
+                    padding=ft.Padding(0, 20),
+                ),
                 ft.Divider(),
+                ft.Text("Szenario", weight=ft.FontWeight.BOLD),
+                scenario_dropdown,
                 ft.Button(
                     "Szenario berechnen",
-                    on_click=load_all_data,
+                    on_click=run_calculations,
                     icon=ft.Icons.CALCULATE,
                     width=220,
                 ),
