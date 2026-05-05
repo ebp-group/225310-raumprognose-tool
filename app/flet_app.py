@@ -220,7 +220,7 @@ def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     pivot = pivot.reindex(columns=years, fill_value=0)
 
     eigentumsformen = pivot.index.tolist()
-    palette = plt.get_cmap("tab10")
+    palette = plt.get_cmap("tab20")
     x = range(len(years))
 
     fig, ax = plt.subplots(figsize=(9, 5))
