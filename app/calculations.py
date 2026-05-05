@@ -202,6 +202,55 @@ def surplus_deficit(
         """).fetchdf()
 
 
+def area_by_eigentumsform(
+    df_gebaeude: pd.DataFrame,
+    years: list[int],
+) -> pd.DataFrame:
+    """Aggregate the available total area (m²) by ownership type and year.
+
+    Only rooms whose operational period covers a given year are included:
+    a room is counted for year *y* when
+    ``Betriebsaufnahme <= y <= Betriebsende``.  ``NULL`` in either bound is
+    treated as "unbounded" (i.e. the room is always available in that
+    direction).
+
+    Args:
+        df_gebaeude: Buildings-and-rooms DataFrame with at least the columns
+            ``Eigentumsform``, ``Fläche``, ``Betriebsaufnahme``, and
+            ``Betriebsende``.
+        years: List of forecast years for which the available area should be
+            calculated.
+
+    Returns:
+        DataFrame with columns ``Eigentumsform``, ``Jahr``, and ``Fläche``,
+        sorted by ``Eigentumsform`` and ``Jahr``.
+
+    SQL equivalent::
+
+        SELECT g."Eigentumsform", y."Jahr", SUM(g."Fläche") AS "Fläche"
+        FROM gebaeude AS g
+        CROSS JOIN (SELECT UNNEST(years) AS "Jahr") AS y
+        WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
+          AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
+        GROUP BY g."Eigentumsform", y."Jahr"
+        ORDER BY g."Eigentumsform", y."Jahr"
+    """
+    with duckdb.connect(":memory:") as conn:
+        conn.register("gebaeude", df_gebaeude)
+        return conn.execute(
+            """
+            SELECT g."Eigentumsform", CAST(y."Jahr" AS BIGINT) AS "Jahr", SUM(g."Fläche") AS "Fläche"
+            FROM gebaeude AS g
+            CROSS JOIN (SELECT UNNEST(?) AS "Jahr") AS y
+            WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
+              AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
+            GROUP BY g."Eigentumsform", y."Jahr"
+            ORDER BY g."Eigentumsform", y."Jahr"
+            """,
+            [years],
+        ).fetchdf()
+
+
 def wide_results(df_sd: pd.DataFrame) -> pd.DataFrame:
     """Pivot the surplus/deficit table to a wide format for display.
 
