@@ -33,7 +33,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 # Ensure the app directory is on the path for sibling imports
 sys.path.insert(0, os.path.dirname(__file__))
 
-from calculations import current_area_by_nutzungsart, future_demand, surplus_deficit
+from calculations import area_by_eigentumsform, current_area_by_nutzungsart, future_demand, surplus_deficit
 from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende
 
 SPLASH_DURATION_SECONDS = 2
@@ -202,6 +202,50 @@ def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[plt.Figure]:
         fig.tight_layout()
         figs.append(fig)
     return figs
+
+
+def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
+    """Stacked bar chart of area by ownership type (Eigentumsform) over selected years."""
+    years = [2025, 2026, 2030, 2040]
+    df = area_by_eigentumsform(df_gebaeude, years)
+
+    # Pivot: index = Eigentumsform, columns = Jahr
+    pivot = df.pivot_table(
+        index="Eigentumsform",
+        columns="Jahr",
+        values="Fläche",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    pivot = pivot.reindex(columns=years, fill_value=0)
+
+    eigentumsformen = pivot.index.tolist()
+    palette = plt.get_cmap("tab20")
+    x = range(len(years))
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    bottom = [0.0] * len(years)
+    for idx, eigentumsform in enumerate(eigentumsformen):
+        values = [float(pivot.loc[eigentumsform, year]) for year in years]
+        ax.bar(
+            x,
+            values,
+            bottom=bottom,
+            label=str(eigentumsform),
+            color=palette(idx % palette.N),
+        )
+        bottom = [b + v for b, v in zip(bottom, values)]
+
+    ax.set_xlabel("Jahr")
+    ax.set_ylabel("Fläche (m²)")
+    ax.set_title("Fläche nach Eigentumsform")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels([str(y) for y in years])
+    if eigentumsformen:
+        ax.legend(title="Eigentumsform", bbox_to_anchor=(1.01, 1), loc="upper left")
+    ax.grid(True, alpha=0.3, axis="y")
+    fig.tight_layout()
+    return fig
 
 
 # ── Excel export builder ─────────────────────────────────────────────────────
@@ -482,6 +526,19 @@ def main(page: ft.Page) -> None:
             page.update()
         plt.close(fig)
 
+    async def _save_eigentumsform_png(_e):
+        fig = _create_eigentumsform_chart(state["df_gebaeude"])
+        path = await ft.FilePicker().save_file(
+            file_name="eigentumsform.png",
+            allowed_extensions=["png"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.update()
+        plt.close(fig)
+
     # ── Scenario dropdown ─────────────────────────────────────────────────
 
     def _scenario_options() -> list[ft.dropdown.Option]:
@@ -710,6 +767,7 @@ def main(page: ft.Page) -> None:
         # ── Tab 3: Diagramme ─────────────────────────────────────────────
         fig_students = _create_students_chart(state["df_studierende"])
         fig_demand = _create_demand_chart(df_demand, state["scenario"])
+        fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
         sd_figs = _create_surplus_deficit_charts(df_sd)
 
         sd_chart_controls: list[ft.Control] = [
@@ -749,6 +807,16 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Container(
                     content=ft.Image(src=_fig_to_base64(fig_demand)),
+                    alignment=ft.Alignment.CENTER,
+                ),
+                ft.Divider(),
+                ft.Text(
+                    "Fläche nach Eigentumsform",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                ft.Container(
+                    content=ft.Image(src=_fig_to_base64(fig_eigentumsform)),
                     alignment=ft.Alignment.CENTER,
                 ),
                 ft.Divider(),
@@ -794,6 +862,11 @@ def main(page: ft.Page) -> None:
                         ft.Button(
                             "📥 Flächenbedarf (PNG)",
                             on_click=_save_demand_png,
+                            icon=ft.Icons.IMAGE,
+                        ),
+                        ft.Button(
+                            "📥 Eigentumsform (PNG)",
+                            on_click=_save_eigentumsform_png,
                             icon=ft.Icons.IMAGE,
                         ),
                     ],
