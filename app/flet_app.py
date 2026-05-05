@@ -386,7 +386,8 @@ def main(page: ft.Page) -> None:
 
     def get_results() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Return (current_area, demand, surplus_deficit) DataFrames."""
-        df_current = current_area_by_nutzungsart(state["df_gebaeude"])
+        years = sorted(state["df_studierende"]["Jahr"].unique().tolist())
+        df_current = current_area_by_nutzungsart(state["df_gebaeude"], years)
         df_demand = future_demand(
             state["df_studierende"], state["df_faktoren"], state["scenario"]
         )
