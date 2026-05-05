@@ -12,32 +12,53 @@ import duckdb
 import pandas as pd
 
 
-def current_area_by_nutzungsart(df_gebaeude: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate the current total area (m²) by usage type.
+def current_area_by_nutzungsart(
+    df_gebaeude: pd.DataFrame,
+    years: list[int],
+) -> pd.DataFrame:
+    """Aggregate the available total area (m²) by usage type and year.
+
+    Only rooms whose operational period covers a given year are included:
+    a room is counted for year *y* when
+    ``Betriebsaufnahme <= y <= Betriebsende``.  ``NULL`` in either bound is
+    treated as "unbounded" (i.e. the room is always available in that
+    direction).
 
     Args:
         df_gebaeude: Buildings-and-rooms DataFrame with at least the columns
-            ``Raumtyp EBP`` and ``Fläche``.
+            ``Raumtyp EBP``, ``Fläche``, ``Betriebsaufnahme``, and
+            ``Betriebsende``.
+        years: List of forecast years for which the available area should be
+            calculated.
 
     Returns:
-        DataFrame with columns ``Raumtyp EBP`` and ``Fläche``,
-        sorted by ``Raumtyp EBP``.
+        DataFrame with columns ``Raumtyp EBP``, ``Jahr``, and ``Fläche``,
+        sorted by ``Raumtyp EBP`` and ``Jahr``.
 
     SQL equivalent::
 
-        SELECT "Raumtyp EBP", SUM("Fläche") AS "Fläche"
-        FROM gebaeude
-        GROUP BY "Raumtyp EBP"
-        ORDER BY "Raumtyp EBP"
+        SELECT g."Raumtyp EBP", y."Jahr", SUM(g."Fläche") AS "Fläche"
+        FROM gebaeude AS g
+        CROSS JOIN (SELECT UNNEST(years) AS "Jahr") AS y
+        WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
+          AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
+        GROUP BY g."Raumtyp EBP", y."Jahr"
+        ORDER BY g."Raumtyp EBP", y."Jahr"
     """
     with duckdb.connect(":memory:") as conn:
         conn.register("gebaeude", df_gebaeude)
-        return conn.execute("""
-            SELECT "Raumtyp EBP", SUM("Fläche") AS "Fläche"
-            FROM gebaeude
-            GROUP BY "Raumtyp EBP"
-            ORDER BY "Raumtyp EBP"
-        """).fetchdf()
+        return conn.execute(
+            """
+            SELECT g."Raumtyp EBP", CAST(y."Jahr" AS BIGINT) AS "Jahr", SUM(g."Fläche") AS "Fläche"
+            FROM gebaeude AS g
+            CROSS JOIN (SELECT UNNEST(?) AS "Jahr") AS y
+            WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
+              AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
+            GROUP BY g."Raumtyp EBP", y."Jahr"
+            ORDER BY g."Raumtyp EBP", y."Jahr"
+            """,
+            [years],
+        ).fetchdf()
 
 
 def future_demand(
@@ -144,7 +165,7 @@ def surplus_deficit(
 
     Args:
         df_current: Output of :func:`current_area_by_nutzungsart` with columns
-            ``Raumtyp EBP`` and ``Fläche``.
+            ``Raumtyp EBP``, ``Jahr``, and ``Fläche``.
         df_demand: Output of :func:`future_demand` with columns ``Nutzungsart``,
             ``Jahr``, ``Bedarf_m2``.
 
@@ -159,7 +180,9 @@ def surplus_deficit(
                d."Bedarf_m2",
                c."Fläche" - d."Bedarf_m2" AS "Differenz_m2"
         FROM demand AS d
-        LEFT JOIN current_area AS c ON d."Nutzungsart" = c."Raumtyp EBP"
+        LEFT JOIN current_area AS c
+               ON d."Nutzungsart" = c."Raumtyp EBP"
+              AND d."Jahr"        = c."Jahr"
     """
     with duckdb.connect(":memory:") as conn:
         conn.register("current_area", df_current)
@@ -171,7 +194,9 @@ def surplus_deficit(
                    d."Bedarf_m2",
                    c."Fläche" - d."Bedarf_m2" AS "Differenz_m2"
             FROM (SELECT *, ROW_NUMBER() OVER () AS _rn FROM demand) AS d
-            LEFT JOIN current_area AS c ON d."Nutzungsart" = c."Raumtyp EBP"
+            LEFT JOIN current_area AS c
+                   ON d."Nutzungsart" = c."Raumtyp EBP"
+                  AND d."Jahr"        = c."Jahr"
             ORDER BY d._rn
         """).fetchdf()
 

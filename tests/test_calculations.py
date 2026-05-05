@@ -15,15 +15,42 @@ def test_current_area_by_nutzungsart_groups_and_sorts() -> None:
         {
             "Raumtyp EBP": ["Seminar", "Labor", "Seminar", "Büro"],
             "Fläche": [50.0, 80.0, 70.0, 30.0],
+            "Betriebsaufnahme": [None, None, None, None],
+            "Betriebsende": [None, None, None, None],
         }
     )
 
-    result = current_area_by_nutzungsart(df_gebaeude)
+    result = current_area_by_nutzungsart(df_gebaeude, [2030])
 
     expected = pd.DataFrame(
         {
             "Raumtyp EBP": ["Büro", "Labor", "Seminar"],
+            "Jahr": [2030, 2030, 2030],
             "Fläche": [30.0, 80.0, 120.0],
+        }
+    )
+    assert_frame_equal(result, expected)
+
+
+def test_current_area_by_nutzungsart_filters_by_betriebsaufnahme_and_betriebsende() -> None:
+    df_gebaeude = pd.DataFrame(
+        {
+            "Raumtyp EBP": ["Seminar", "Seminar", "Labor"],
+            "Fläche": [100.0, 200.0, 50.0],
+            # First Seminar room only available from 2035; second always available
+            "Betriebsaufnahme": [2035, None, None],
+            # Labor ends before 2040
+            "Betriebsende": [None, None, 2035],
+        }
+    )
+
+    result = current_area_by_nutzungsart(df_gebaeude, [2030, 2040])
+
+    expected = pd.DataFrame(
+        {
+            "Raumtyp EBP": ["Labor", "Seminar", "Seminar"],
+            "Jahr": [2030, 2030, 2040],
+            "Fläche": [50.0, 200.0, 300.0],
         }
     )
     assert_frame_equal(result, expected)
@@ -152,6 +179,7 @@ def test_surplus_deficit_merges_current_and_demand_and_computes_difference() -> 
     df_current = pd.DataFrame(
         {
             "Raumtyp EBP": ["Seminar", "Labor"],
+            "Jahr": [2030, 2030],
             "Fläche": [2200.0, 1600.0],
         }
     )

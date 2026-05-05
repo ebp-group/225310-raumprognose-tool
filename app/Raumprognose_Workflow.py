@@ -138,19 +138,23 @@ def _(df_faktoren, mo):
 
 
 @app.cell
-def _(current_area_by_nutzungsart, df_gebaeude, mo):
+def _(current_area_by_nutzungsart, df_gebaeude, df_studierende, mo):
     mo.md("### Step A – Current area by usage type")
 
-    df_current = current_area_by_nutzungsart(df_gebaeude)
+    _years = sorted(df_studierende["Jahr"].unique().tolist())
+    df_current = current_area_by_nutzungsart(df_gebaeude, _years)
 
     mo.vstack([
         mo.md("""
 **SQL (DuckDB):**
 ```sql
-SELECT "Raumtyp EBP", SUM("Fläche") AS "Fläche"
-FROM gebaeude_raeume
-GROUP BY "Raumtyp EBP"
-ORDER BY "Raumtyp EBP"
+SELECT g."Raumtyp EBP", y."Jahr", SUM(g."Fläche") AS "Fläche"
+FROM gebaeude_raeume AS g
+CROSS JOIN (SELECT UNNEST(years) AS "Jahr") AS y
+WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
+  AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
+GROUP BY g."Raumtyp EBP", y."Jahr"
+ORDER BY g."Raumtyp EBP", y."Jahr"
 ```
 """),
         mo.ui.table(df_current),
