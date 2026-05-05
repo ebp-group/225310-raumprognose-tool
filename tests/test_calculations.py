@@ -55,7 +55,7 @@ def test_future_demand_with_nutzungsart_and_kategorie_summe() -> None:
         {
             "Nutzungsart": ["Büro", "Büro"],
             "Jahr": [2030, 2040],
-            "Bedarf_m2": [180.0, 216.0],
+            "Bedarf_m2": [260.0, 336.0],
         }
     )
     assert_frame_equal(result, expected)
