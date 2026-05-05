@@ -49,6 +49,7 @@ def current_area_by_nutzungsart(
         conn.register("gebaeude", df_gebaeude)
         return conn.execute(
             """
+            -- CAST to BIGINT so DuckDB's UNNEST int32 aligns with pandas int64
             SELECT g."Raumtyp EBP", CAST(y."Jahr" AS BIGINT) AS "Jahr", SUM(g."Fläche") AS "Fläche"
             FROM gebaeude AS g
             CROSS JOIN (SELECT UNNEST(?) AS "Jahr") AS y
