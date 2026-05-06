@@ -19,6 +19,9 @@ Zeigt die Entwicklung der Personenzahlen über alle Prognosejahre, aufgeteilt na
 
 **Ziel:** Überblick über das Wachstum oder die Stagnation der einzelnen Personengruppen.
 
+<img width="1234" height="640" alt="Studierendenzahlen & Kategorien" src="https://github.com/user-attachments/assets/4c0abb45-be20-4d52-9ffa-c8c5e121a75a" />
+
+
 ---
 
 ## 2. Flächenbedarf nach Nutzungsart und Jahr
@@ -37,6 +40,9 @@ Der Titel des Diagramms enthält den Namen des gewählten Szenarios.
 
 **Ziel:** Vergleich des Flächenbedarfs über die Zeit und zwischen den Nutzungsarten.
 
+<img width="1233" height="645" alt="Flächenbedarf nach Nutzungsart und Jahr" src="https://github.com/user-attachments/assets/9063e1c1-4bcb-4b09-a554-b01051b92cac" />
+
+
 ---
 
 ## 3. Fläche nach Eigentumsform
@@ -52,6 +58,8 @@ Zeigt die verfügbare Gesamtfläche (m²) für die Jahre **2025, 2026, 2030 und 
 | Segmente | Eine Farbe pro Eigentumsform |
 
 **Ziel:** Überblick über die Entwicklung der Flächenstruktur nach Eigentumsform (z. B. Eigentum vs. Miete).
+
+<img width="1249" height="745" alt="Fläche nach Eigentumsform" src="https://github.com/user-attachments/assets/138cd479-4e4a-4ef1-93e4-67a79e5451db" />
 
 ---
 
@@ -70,6 +78,9 @@ Für jedes der Stützjahre **2026, 2030, 2040 und 2050** wird ein separates Balk
 Eine horizontale Nulllinie trennt Über- und Unterschuss visuell.
 
 **Ziel:** Schnelle Identifikation von problematischen Nutzungsarten in einem bestimmten Jahr.
+
+<img width="1290" height="1081" alt="Über-/Unterschuss nach Nutzungsart" src="https://github.com/user-attachments/assets/06a5d0bb-a2b1-49bb-8036-25723165a7bc" />
+
 
 ---
 
