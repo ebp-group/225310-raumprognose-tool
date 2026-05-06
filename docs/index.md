@@ -10,8 +10,8 @@ Mit dem Tool können Planende auf einen Blick beurteilen, ob für eine gegebene 
 
 ```mermaid
 flowchart LR
-    A["**Excel-Dateien laden**\nGebäude & Räume\nStudierende\nNutzungsfaktoren"] --> B["**Szenario wählen**\nSzenario berechnen"]
-    B --> C["**Ergebnisse & Diagramme**\nÜbersicht · Ergebnisse\nDiagramme · Export"]
+    A["<b>Excel-Dateien laden</b>\nGebäude & Räume\nStudierende\nNutzungsfaktoren"] --> B["<b>Szenario wählen</b>\nSzenario berechnen"]
+    B --> C["<b>Ergebnisse & Diagramme</b>\nÜbersicht · Ergebnisse\nDiagramme · Export"]
 ```
 
 ---
