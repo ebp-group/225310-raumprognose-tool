@@ -45,9 +45,15 @@ Klicken Sie in der linken Seitenleiste auf die drei Datei-Schaltflächen und wä
 
 Klicken Sie danach auf **„Daten laden"**.
 
+<img width="286" height="428" alt="Daten laden" src="https://github.com/user-attachments/assets/c9935473-09b4-4ea7-922a-c0fcac413e05" />
+
+
 ### 3. Szenario auswählen und berechnen
 
 Wählen Sie im Dropdown **„Szenario wählen"** ein verfügbares Szenario (z. B. *Basis*, *Wachstum*, *Digital*) und klicken Sie auf **„Szenario berechnen"**.
+
+<img width="278" height="194" alt="Szenario wählen" src="https://github.com/user-attachments/assets/f7f60d11-25a0-44f9-a63f-8d6f7dbea206" />
+
 
 ### 4. Ergebnisse analysieren und exportieren
 
