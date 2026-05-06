@@ -27,6 +27,9 @@ Angezeigte Spalten: `Szenario`, `Nutzungsart`, `Faktor_m2_pro_Person`, `Schritt`
 
 ---
 
+<img width="1433" height="1278" alt="Übersicht" src="https://github.com/user-attachments/assets/64126776-2983-4e0e-a20c-72edcdb7f7a3" />
+
+
 ## Tab: 📊 Ergebnisse
 
 Der Tab **Ergebnisse** zeigt die berechneten Flächen-Über- und -Unterschüsse pro Nutzungsart.
@@ -69,3 +72,6 @@ Darunter erscheint die detaillierte Ergebnistabelle mit allen Prognosejahren und
 | `Differenz (m²)` | Ist-Fläche − Bedarf (positiv = Überschuss) |
 
 Zahlenwerte werden mit Tausendertrennzeichen (Apostroph) formatiert, z. B. `12'500`.
+
+<img width="808" height="1209" alt="Ergebnisse" src="https://github.com/user-attachments/assets/a2b6be5c-571b-48c8-b2e4-794ed5f2fe33" />
+
