@@ -7,6 +7,9 @@ Der Tab **⬇️ Export** ermöglicht das Speichern der Berechnungsergebnisse un
 
 ---
 
+<img width="950" height="380" alt="Export" src="https://github.com/user-attachments/assets/6fe62ce3-0e72-412b-8b42-55e88157909e" />
+
+
 ## Excel-Export
 
 **Schaltfläche:** `📥 Ergebnisse als Excel speichern`
