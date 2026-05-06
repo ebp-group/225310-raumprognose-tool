@@ -1,5 +1,7 @@
 # Raumprognose Tool
 
+![Raumprognose Tool](assets/splash.png)
+
 Das **Raumprognose Tool** ist eine interaktive Desktop-Applikation (entwickelt mit [Flet](https://flet.dev/)), die Flächenprognosen für Universitäts- und Campusgebäude berechnet und visualisiert.
 
 ---
