@@ -422,10 +422,25 @@ def main(page: ft.Page) -> None:
         title=ft.Text("🏛️ Raumprognose Tool"),
         bgcolor=ft.Colors.SURFACE,
         actions=[
-            ft.TextButton(
-                "Über",
-                on_click=lambda _: _show_about_dialog(page),
-                style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE),
+            ft.MenuBar(
+                controls=[
+                    ft.SubmenuButton(
+                        content=ft.Text("Hilfe"),
+                        controls=[
+                            ft.MenuItemButton(
+                                content=ft.Text("Über"),
+                                on_click=lambda _: _show_about_dialog(page),
+                            ),
+                            ft.MenuItemButton(
+                                content=ft.Text("Dokumentation"),
+                                on_click=lambda _: page.launch_url(
+                                    "https://ebp-group.github.io/225310-raumprognose-tool/"
+                                ),
+                            ),
+                        ],
+                    ),
+                ],
+                style=ft.MenuStyle(bgcolor=ft.Colors.SURFACE),
             ),
         ],
     )
