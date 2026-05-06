@@ -18,6 +18,22 @@ import asyncio
 from pathlib import Path
 from typing import Any, cast
 import logging
+import flet as ft
+import flet_datatable2 as fdt
+import matplotlib
+
+matplotlib.use("Agg")  # noqa: E402 – must be set before importing pyplot
+import matplotlib.pyplot as plt  # noqa: E402
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils.dataframe import dataframe_to_rows
+
+# Ensure the app directory is on the path for sibling imports
+sys.path.insert(0, os.path.dirname(__file__))
+
+from calculations import area_by_eigentumsform, current_area_by_nutzungsart, future_demand, surplus_deficit
+from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende
 
 try:
     from importlib.metadata import version as _pkg_version
@@ -44,23 +60,7 @@ APP_LICENSE_TEXT = (
     "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" "
     "AND WITHOUT WARRANTY OF ANY KIND."
 )
-
-import flet as ft
-import flet_datatable2 as fdt
-import matplotlib
-
-matplotlib.use("Agg")  # noqa: E402 – must be set before importing pyplot
-import matplotlib.pyplot as plt  # noqa: E402
-import pandas as pd
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils.dataframe import dataframe_to_rows
-
-# Ensure the app directory is on the path for sibling imports
-sys.path.insert(0, os.path.dirname(__file__))
-
-from calculations import area_by_eigentumsform, current_area_by_nutzungsart, future_demand, surplus_deficit
-from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende
+APP_DOCUMENTATION_URL = "https://ebp-group.github.io/225310-raumprognose-tool/"
 
 SPLASH_DURATION_SECONDS = 2
 SPLASH_FADE_OUT_MS = 300
@@ -398,12 +398,12 @@ def _show_about_dialog(page: ft.Page) -> None:
         actions=[
             ft.TextButton(
                 "Schliessen",
-                on_click=lambda _: page.close(dlg),
+                on_click=lambda _: page.pop_dialog(),
             )
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-    page.open(dlg)
+    page.show_dialog(dlg)
 
 
 # ── Main application ─────────────────────────────────────────────────────────
@@ -418,6 +418,14 @@ def main(page: ft.Page) -> None:
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
 
+    async def _open_documentation() -> None:
+        await ft.UrlLauncher().launch_url(
+            APP_DOCUMENTATION_URL,
+            mode=ft.LaunchMode.IN_APP_BROWSER_VIEW,
+            browser_configuration=ft.BrowserConfiguration(show_title=True),
+        )
+
+
     page.appbar = ft.AppBar(
         title=ft.Text("🏛️ Raumprognose Tool"),
         bgcolor=ft.Colors.SURFACE,
@@ -428,14 +436,12 @@ def main(page: ft.Page) -> None:
                         content=ft.Text("Hilfe"),
                         controls=[
                             ft.MenuItemButton(
-                                content=ft.Text("Über"),
-                                on_click=lambda _: _show_about_dialog(page),
+                                content=ft.Text("Dokumentation"),
+                                on_click=_open_documentation,
                             ),
                             ft.MenuItemButton(
-                                content=ft.Text("Dokumentation"),
-                                on_click=lambda _: page.launch_url(
-                                    "https://ebp-group.github.io/225310-raumprognose-tool/"
-                                ),
+                                content=ft.Text("Über"),
+                                on_click=lambda _: _show_about_dialog(page),
                             ),
                         ],
                     ),
