@@ -214,10 +214,14 @@ def area_by_eigentumsform(
     treated as "unbounded" (i.e. the room is always available in that
     direction).
 
+    Special case: rows where ``Eigentumsform = 'Mietliegenschaften'`` **and**
+    ``Eigentümer = 'Hochbauamt St. Gallen'`` are counted under the category
+    ``'Eigenmiete'`` instead of ``'Mietliegenschaften'``.
+
     Args:
         df_gebaeude: Buildings-and-rooms DataFrame with at least the columns
-            ``Eigentumsform``, ``Fläche``, ``Betriebsaufnahme``, and
-            ``Betriebsende``.
+            ``Eigentumsform``, ``Eigentümer``, ``Fläche``, ``Betriebsaufnahme``,
+            and ``Betriebsende``.
         years: List of forecast years for which the available area should be
             calculated.
 
@@ -227,25 +231,55 @@ def area_by_eigentumsform(
 
     SQL equivalent::
 
-        SELECT g."Eigentumsform", y."Jahr", SUM(g."Fläche") AS "Fläche"
+        SELECT
+            CASE
+                WHEN g."Eigentumsform" = 'Mietliegenschaften'
+                     AND g."Eigentümer" = 'Hochbauamt St. Gallen'
+                THEN 'Eigenmiete'
+                ELSE g."Eigentumsform"
+            END AS "Eigentumsform",
+            y."Jahr",
+            SUM(g."Fläche") AS "Fläche"
         FROM gebaeude AS g
         CROSS JOIN (SELECT UNNEST(years) AS "Jahr") AS y
         WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
           AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
-        GROUP BY g."Eigentumsform", y."Jahr"
-        ORDER BY g."Eigentumsform", y."Jahr"
+        GROUP BY
+            CASE
+                WHEN g."Eigentumsform" = 'Mietliegenschaften'
+                     AND g."Eigentümer" = 'Hochbauamt St. Gallen'
+                THEN 'Eigenmiete'
+                ELSE g."Eigentumsform"
+            END,
+            y."Jahr"
+        ORDER BY "Eigentumsform", y."Jahr"
     """
     with duckdb.connect(":memory:") as conn:
         conn.register("gebaeude", df_gebaeude)
         return conn.execute(
             """
-            SELECT g."Eigentumsform", CAST(y."Jahr" AS BIGINT) AS "Jahr", SUM(g."Fläche") AS "Fläche"
+            SELECT
+                CASE
+                    WHEN g."Eigentumsform" = 'Mietliegenschaften'
+                         AND g."Eigentümer" = 'Hochbauamt St. Gallen'
+                    THEN 'Eigenmiete'
+                    ELSE g."Eigentumsform"
+                END AS "Eigentumsform",
+                CAST(y."Jahr" AS BIGINT) AS "Jahr",
+                SUM(g."Fläche") AS "Fläche"
             FROM gebaeude AS g
             CROSS JOIN (SELECT UNNEST(?) AS "Jahr") AS y
             WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
               AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
-            GROUP BY g."Eigentumsform", y."Jahr"
-            ORDER BY g."Eigentumsform", y."Jahr"
+            GROUP BY
+                CASE
+                    WHEN g."Eigentumsform" = 'Mietliegenschaften'
+                         AND g."Eigentümer" = 'Hochbauamt St. Gallen'
+                    THEN 'Eigenmiete'
+                    ELSE g."Eigentumsform"
+                END,
+                y."Jahr"
+            ORDER BY "Eigentumsform", y."Jahr"
             """,
             [years],
         ).fetchdf()

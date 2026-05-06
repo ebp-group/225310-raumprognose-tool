@@ -3,6 +3,7 @@ from pandas.testing import assert_frame_equal
 import pytest
 
 from app.calculations import (
+    area_by_eigentumsform,
     current_area_by_nutzungsart,
     future_demand,
     surplus_deficit,
@@ -225,4 +226,88 @@ def test_wide_results_pivots_by_year() -> None:
     )
     expected.columns.name = "Jahr"
 
+    assert_frame_equal(result, expected)
+
+
+def _make_gebaeude(rows: list[dict]) -> pd.DataFrame:
+    """Build a minimal df_gebaeude fixture from a list of row dicts."""
+    defaults: dict = {
+        "Eigentumsform": "Eigentum",
+        "Eigentümer": "",
+        "Fläche": 100.0,
+        "Betriebsaufnahme": None,
+        "Betriebsende": None,
+    }
+    return pd.DataFrame([{**defaults, **r} for r in rows])
+
+
+def test_area_by_eigentumsform_groups_and_sorts() -> None:
+    df = _make_gebaeude(
+        [
+            {"Eigentumsform": "Eigentum", "Fläche": 200.0},
+            {"Eigentumsform": "Miete", "Fläche": 80.0},
+            {"Eigentumsform": "Eigentum", "Fläche": 50.0},
+        ]
+    )
+    result = area_by_eigentumsform(df, [2030])
+    expected = pd.DataFrame(
+        {
+            "Eigentumsform": ["Eigentum", "Miete"],
+            "Jahr": [2030, 2030],
+            "Fläche": [250.0, 80.0],
+        }
+    )
+    assert_frame_equal(result, expected)
+
+
+def test_area_by_eigentumsform_maps_mietliegenschaften_hochbauamt_to_eigenmiete() -> None:
+    df = _make_gebaeude(
+        [
+            # Should become 'Eigenmiete'
+            {
+                "Eigentumsform": "Mietliegenschaften",
+                "Eigentümer": "Hochbauamt St. Gallen",
+                "Fläche": 300.0,
+            },
+            # Different owner — stays 'Mietliegenschaften'
+            {
+                "Eigentumsform": "Mietliegenschaften",
+                "Eigentümer": "Andere GmbH",
+                "Fläche": 120.0,
+            },
+            # Plain 'Eigentum' — unaffected
+            {"Eigentumsform": "Eigentum", "Fläche": 50.0},
+        ]
+    )
+    result = area_by_eigentumsform(df, [2030])
+    expected = pd.DataFrame(
+        {
+            "Eigentumsform": ["Eigenmiete", "Eigentum", "Mietliegenschaften"],
+            "Jahr": [2030, 2030, 2030],
+            "Fläche": [300.0, 50.0, 120.0],
+        }
+    )
+    assert_frame_equal(result, expected)
+
+
+def test_area_by_eigentumsform_merges_eigenmiete_with_existing_eigenmiete() -> None:
+    """Rows already labelled 'Eigenmiete' and converted rows are summed together."""
+    df = _make_gebaeude(
+        [
+            {
+                "Eigentumsform": "Mietliegenschaften",
+                "Eigentümer": "Hochbauamt St. Gallen",
+                "Fläche": 300.0,
+            },
+            {"Eigentumsform": "Eigenmiete", "Fläche": 100.0},
+        ]
+    )
+    result = area_by_eigentumsform(df, [2030])
+    expected = pd.DataFrame(
+        {
+            "Eigentumsform": ["Eigenmiete"],
+            "Jahr": [2030],
+            "Fläche": [400.0],
+        }
+    )
     assert_frame_equal(result, expected)
