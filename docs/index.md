@@ -8,12 +8,10 @@ Das **Raumprognose Tool** ist eine interaktive Desktop-Applikation (entwickelt m
 
 Mit dem Tool können Planende auf einen Blick beurteilen, ob für eine gegebene Nutzungsart in einem bestimmten Prognosejahr ein Flächenüberschuss oder ein Flächendefizit besteht.
 
-```
- Excel-Dateien laden          Szenario wählen          Ergebnisse & Diagramme
- ──────────────────           ───────────────           ──────────────────────
-  Gebäude & Räume   ──►   Szenario berechnen   ──►   Übersicht · Ergebnisse
-  Studierende                                         Diagramme · Export
-  Nutzungsfaktoren
+```mermaid
+flowchart LR
+    A["**Excel-Dateien laden**\nGebäude & Räume\nStudierende\nNutzungsfaktoren"] --> B["**Szenario wählen**\nSzenario berechnen"]
+    B --> C["**Ergebnisse & Diagramme**\nÜbersicht · Ergebnisse\nDiagramme · Export"]
 ```
 
 ---
