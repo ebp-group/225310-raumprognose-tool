@@ -171,8 +171,8 @@ pre-commit run --all-files
 
 # TODO
 
-- [ ] Herleitungsmodell in ein Excel zusammenführen (+3 Zeilen für Forschung, Services, und Stundenlohn), einige Raumkategorien steigen stufenweise an (~ alle 3'000 Studierende braucht es einen neuen Vorlesungssaal)
-- [ ] Prognosedaten in ein Excel zusammenführen (für jedes Jahr, gemäss den gegeben Excels), 1x für Studiernde und 1x für Mitarbeitende
-- [ ] Prognose für jedes Jahr rechnen, Output dann aber nur für definierte Jahre (z.B. 2030, 2040, 2050), Peaks unterwegs erkennen
-- [ ] IST ändert sich jedes Jahr gemäss Jahr der Inbetriebnahme bzw. Ausserbetriebnahme
-- [ ] Es gibt 2 Herleitungsmodelle und 2 Prognosemodelle (steigend + capped), insgesamt 4 Berechnungen
+- [x] Herleitungsmodell in ein Excel zusammenführen (+3 Zeilen für Forschung, Services, und Stundenlohn), einige Raumkategorien steigen stufenweise an (~ alle 3'000 Studierende braucht es einen neuen Vorlesungssaal)
+- [x] Prognosedaten in ein Excel zusammenführen (für jedes Jahr, gemäss den gegeben Excels), 1x für Studiernde und 1x für Mitarbeitende
+- [x] Prognose für jedes Jahr rechnen, Output dann aber nur für definierte Jahre (z.B. 2030, 2040, 2050), Peaks unterwegs erkennen
+- [x] IST ändert sich jedes Jahr gemäss Jahr der Inbetriebnahme bzw. Ausserbetriebnahme
+- [x] Es gibt 2 Herleitungsmodelle und 2 Prognosemodelle (steigend + capped), insgesamt 4 Berechnungen
