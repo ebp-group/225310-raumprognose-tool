@@ -184,7 +184,7 @@ def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
     #years = sorted(df_demand["jahr"].unique())
     years = [2026, 2030, 2040, 2050]
 
-    nutzungsarten = sorted(df_demand["Nutzungsart"].unique())
+    nutzungsarten = sorted(df_demand[df_demand["Bedarf_m2"] > 0]["Nutzungsart"].unique())
     x = range(len(nutzungsarten))
     width = 0.8 / max(len(years), 1)
 
