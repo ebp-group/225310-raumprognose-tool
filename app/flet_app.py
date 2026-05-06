@@ -19,6 +19,32 @@ from pathlib import Path
 from typing import Any, cast
 import logging
 
+try:
+    from importlib.metadata import version as _pkg_version
+
+    APP_VERSION = _pkg_version("raumprognose-tool")
+except Exception:
+    APP_VERSION = "0.1.0"
+
+APP_NAME = "Raumprognose Tool"
+APP_COPYRIGHT_YEAR = "2026"
+APP_COPYRIGHT = f"© {APP_COPYRIGHT_YEAR} EBP"
+APP_LICENSE_NAME = "BSD 3-Clause License"
+APP_LICENSE_TEXT = (
+    "Redistribution and use in source and binary forms, with or without "
+    "modification, are permitted provided that the following conditions are met:\n\n"
+    "1. Redistributions of source code must retain the above copyright notice, "
+    "this list of conditions and the following disclaimer.\n\n"
+    "2. Redistributions in binary form must reproduce the above copyright notice, "
+    "this list of conditions and the following disclaimer in the documentation "
+    "and/or other materials provided with the distribution.\n\n"
+    "3. Neither the name of the copyright holder nor the names of its contributors "
+    "may be used to endorse or promote products derived from this software without "
+    "specific prior written permission.\n\n"
+    "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" "
+    "AND WITHOUT WARRANTY OF ANY KIND."
+)
+
 import flet as ft
 import flet_datatable2 as fdt
 import matplotlib
@@ -314,6 +340,72 @@ def _build_excel(
     return buf.getvalue()
 
 
+# ── About dialog ─────────────────────────────────────────────────────────────
+
+
+def _show_about_dialog(page: ft.Page) -> None:
+    """Open a modal dialog with application information."""
+
+    dlg = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Über diese Applikation", weight=ft.FontWeight.BOLD),
+        content=ft.Container(
+            content=ft.Column(
+                [
+                    ft.Image(
+                        src="icon.png",
+                        width=80,
+                        height=80,
+                        fit=ft.BoxFit.CONTAIN,
+                    ),
+                    ft.Text(
+                        APP_NAME,
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    ft.Text(
+                        f"Version {APP_VERSION}",
+                        size=13,
+                        color=ft.Colors.GREY_600,
+                    ),
+                    ft.Text(
+                        APP_COPYRIGHT,
+                        size=13,
+                    ),
+                    ft.Divider(),
+                    ft.Text(
+                        APP_LICENSE_NAME,
+                        weight=ft.FontWeight.BOLD,
+                        size=13,
+                    ),
+                    ft.Container(
+                        content=ft.Text(
+                            APP_LICENSE_TEXT,
+                            size=11,
+                            color=ft.Colors.GREY_700,
+                        ),
+                        padding=ft.Padding(8, 4, 8, 4),
+                        bgcolor=ft.Colors.GREY_100,
+                        border_radius=4,
+                        width=440,
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=8,
+            ),
+            padding=ft.Padding(8, 0, 8, 0),
+        ),
+        actions=[
+            ft.TextButton(
+                "Schliessen",
+                on_click=lambda _: page.close(dlg),
+            )
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.open(dlg)
+
+
 # ── Main application ─────────────────────────────────────────────────────────
 
 
@@ -325,6 +417,18 @@ def main(page: ft.Page) -> None:
     page.window.height = 900
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
+
+    page.appbar = ft.AppBar(
+        title=ft.Text("🏛️ Raumprognose Tool"),
+        bgcolor=ft.Colors.SURFACE,
+        actions=[
+            ft.TextButton(
+                "Über",
+                on_click=lambda _: _show_about_dialog(page),
+                style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE),
+            ),
+        ],
+    )
 
     # ── Splash screen overlay ─────────────────────────────────────────────
 
