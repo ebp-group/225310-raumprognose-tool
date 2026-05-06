@@ -33,7 +33,7 @@ Mit dem Tool können Planende auf einen Blick beurteilen, ob für eine gegebene 
 
 ### 1. Applikation starten
 
-Die Applikation via [GitHub herunterladen](https://github.com/ebp-group/225310-raumprognose-tool/releases) (`RaumprognoseTool-windows.zip`), entpacken und die Applikation durch Doppelklick auf `RaumprognoseTool.exe` starten.
+[Aktuellen Release der Applikation via GitHub herunterladen](https://github.com/ebp-group/225310-raumprognose-tool/releases/latest) (`RaumprognoseTool-windows.zip`), entpacken und die Applikation durch Doppelklick auf `RaumprognoseTool.exe` starten.
 
 ### 2. Excel-Dateien laden
 
