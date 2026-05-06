@@ -3,8 +3,18 @@ name: Build Windows App
 on:
   push:
     branches: [main]
+    paths:
+      - "app/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
   pull_request:
     branches: [main]
+    paths:
+      - "app/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
   release:
     types: [published]
   workflow_dispatch:
