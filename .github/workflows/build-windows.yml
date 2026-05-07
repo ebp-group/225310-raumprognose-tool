@@ -66,8 +66,20 @@ jobs:
       - name: Install PyInstaller
         run: uv pip install pyinstaller
 
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(python -c "import tomllib; f=open('pyproject.toml','rb'); d=tomllib.load(f); print(d['project']['version'])")
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "${VERSION}" > app/assets/version.txt
+
       - name: Build Windows executable
-        run: uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico --add-data=app/assets:assets
+        run: uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico --add-data=app/assets:assets --product-version '${{ steps.version.outputs.VERSION }}'
 
       - name: Upload build artifact
         if: github.event_name == 'release'
