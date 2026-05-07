@@ -6,8 +6,6 @@ __pycache__/
 *.pyc
 *.egg
 *.egg-info/
-dist/
-build/
 *.so
 .eggs/
 
@@ -52,3 +50,8 @@ site/
 .idea/
 *.swp
 *.swo
+
+# Flet build artifacts
+dist/
+build/
+RaumprognoseTool.spec

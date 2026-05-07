@@ -169,10 +169,25 @@ Run all pre-commit checks manually:
 pre-commit run --all-files
 ```
 
-# TODO
+# Create a new release
 
-- [x] Herleitungsmodell in ein Excel zusammenführen (+3 Zeilen für Forschung, Services, und Stundenlohn), einige Raumkategorien steigen stufenweise an (~ alle 3'000 Studierende braucht es einen neuen Vorlesungssaal)
-- [x] Prognosedaten in ein Excel zusammenführen (für jedes Jahr, gemäss den gegeben Excels), 1x für Studiernde und 1x für Mitarbeitende
-- [x] Prognose für jedes Jahr rechnen, Output dann aber nur für definierte Jahre (z.B. 2030, 2040, 2050), Peaks unterwegs erkennen
-- [x] IST ändert sich jedes Jahr gemäss Jahr der Inbetriebnahme bzw. Ausserbetriebnahme
-- [x] Es gibt 2 Herleitungsmodelle und 2 Prognosemodelle (steigend + capped), insgesamt 4 Berechnungen
+- Update the version number in pyproject.toml
+- Run `uv sync` and `uv pip install -e .` (this should update `uv.lock` with the new version number)
+- Push the changes to GitHub and [create a new release](https://github.com/ebp-group/225310-raumprognose-tool/releases/new), generate the release notes
+- Wait for the build job to finish, this will add the Windows Build to the release
+
+## Create the windows build locally
+
+1. Install PyInstaller
+
+```bash
+uv pip install pyinstaller
+```
+
+2. Build the windows executable
+
+```bash
+uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico
+```
+
+The executable will be build and is available at `dist\RaumprognoseTool.exe`.
