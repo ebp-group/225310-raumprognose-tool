@@ -870,7 +870,7 @@ def main(page: ft.Page) -> None:
         tab2 = ft.Column(
             [
                 ft.Text(
-                    f"Flächen-Über-/Unterschuss – Szenario: {state['scenario']}",
+                    f"Flächen-Überschuss/Defizit – Szenario: {state['scenario']}",
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
@@ -959,7 +959,7 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Divider(),
                 ft.Text(
-                    "Über-/Unterschuss nach Nutzungsart",
+                    "Überschuss/Defizit nach Nutzungsart",
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
