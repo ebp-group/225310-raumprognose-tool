@@ -15,6 +15,7 @@ import io
 import os
 import sys
 import asyncio
+import zipfile
 from pathlib import Path
 from typing import Any, cast
 import logging
@@ -138,6 +139,17 @@ def _fig_to_base64(fig: plt.Figure) -> str:
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
     buf.seek(0)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _build_png_zip(figs: list[tuple[str, plt.Figure]]) -> bytes:
+    """Build a ZIP archive containing PNG renders of multiple figures."""
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for filename, fig in figs:
+            png_buf = io.BytesIO()
+            fig.savefig(png_buf, format="png", dpi=150, bbox_inches="tight")
+            archive.writestr(filename, png_buf.getvalue())
+    return zip_buf.getvalue()
 
 
 # ── Chart builders ────────────────────────────────────────────────────────────
@@ -677,6 +689,67 @@ def main(page: ft.Page) -> None:
             page.update()
         plt.close(fig)
 
+    async def _save_surplus_deficit_pngs(_e):
+        _, _, df_sd = get_results()
+        figs = _create_surplus_deficit_charts(df_sd)
+        years = [2026, 2030, 2040, 2050]
+
+        path = await ft.FilePicker().save_file(
+            file_name=f"ueber_unterschuss_{state['scenario']}.zip",
+            allowed_extensions=["zip"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            zip_bytes = _build_png_zip(
+                [
+                    (f"ueber_unterschuss_{year}_{state['scenario']}.png", fig)
+                    for year, fig in zip(years, figs)
+                ]
+            )
+            with open(path, "wb") as f:
+                f.write(zip_bytes)
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.update()
+
+        for fig in figs:
+            plt.close(fig)
+
+    async def _save_all_pngs_zip(_e):
+        _, df_demand, df_sd = get_results()
+        fig_students = _create_students_chart(state["df_studierende"])
+        fig_demand = _create_demand_chart(df_demand, state["scenario"])
+        fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
+        sd_figs = _create_surplus_deficit_charts(df_sd)
+        years = [2026, 2030, 2040, 2050]
+
+        path = await ft.FilePicker().save_file(
+            file_name=f"diagramme_{state['scenario']}.zip",
+            allowed_extensions=["zip"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            zip_bytes = _build_png_zip(
+                [
+                    ("studierende.png", fig_students),
+                    (f"flaechenbedarf_{state['scenario']}.png", fig_demand),
+                    ("eigentumsform.png", fig_eigentumsform),
+                    *[
+                        (f"ueber_unterschuss_{year}_{state['scenario']}.png", fig)
+                        for year, fig in zip(years, sd_figs)
+                    ],
+                ]
+            )
+            with open(path, "wb") as f:
+                f.write(zip_bytes)
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.update()
+
+        plt.close(fig_students)
+        plt.close(fig_demand)
+        plt.close(fig_eigentumsform)
+        for fig in sd_figs:
+            plt.close(fig)
+
     # ── Scenario dropdown ─────────────────────────────────────────────────
 
     def _scenario_options() -> list[ft.dropdown.Option]:
@@ -1007,8 +1080,18 @@ def main(page: ft.Page) -> None:
                             on_click=_save_eigentumsform_png,
                             icon=ft.Icons.IMAGE,
                         ),
+                        ft.Button(
+                            "📥 Über-/Unterschuss (ZIP)",
+                            on_click=_save_surplus_deficit_pngs,
+                            icon=ft.Icons.FOLDER_ZIP,
+                        ),
                     ],
                     spacing=16,
+                ),
+                ft.Button(
+                    "📦 Alle Diagramme (ZIP)",
+                    on_click=_save_all_pngs_zip,
+                    icon=ft.Icons.FOLDER_ZIP,
                 ),
             ],
             spacing=16,
