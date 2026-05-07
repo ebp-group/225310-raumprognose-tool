@@ -67,7 +67,7 @@ jobs:
         run: uv pip install pyinstaller
 
       - name: Build Windows executable
-        run: uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico
+        run: uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico --add-data=app/assets:assets
 
       - name: Upload build artifact
         if: github.event_name == 'release'

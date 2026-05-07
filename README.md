@@ -187,7 +187,7 @@ uv pip install pyinstaller
 2. Build the windows executable
 
 ```bash
-uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico
+uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico --add-data=app/assets:assets
 ```
 
 The executable will be build and is available at `dist\RaumprognoseTool.exe`.
