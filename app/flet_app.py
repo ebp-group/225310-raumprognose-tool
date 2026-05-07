@@ -35,12 +35,30 @@ sys.path.insert(0, os.path.dirname(__file__))
 from calculations import area_by_eigentumsform, current_area_by_nutzungsart, future_demand, surplus_deficit
 from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende
 
-try:
-    from importlib.metadata import version as _pkg_version
+def get_assets_dir() -> Path:
+    default_assets_dir = Path(__file__).parent / "assets"   # fallback for local runs
+    return Path(os.environ.get("FLET_ASSETS_DIR", str(default_assets_dir))).resolve()
 
-    APP_VERSION = _pkg_version("raumprognose-tool")
-except Exception:
-    APP_VERSION = "0.1.0"
+
+def _resolve_app_version() -> str:
+    # 1. Bundled version file written by the CI build step
+    _version_file = get_assets_dir() / "version.txt"
+    if _version_file.is_file():
+        _v = _version_file.read_text(encoding="utf-8").strip()
+        if _v:
+            return _v
+    # 2. Installed-package metadata (works in normal pip/uv environments)
+    try:
+        from importlib.metadata import version as _pkg_version
+
+        return _pkg_version("raumprognose-tool")
+    except Exception:
+        pass
+    # 3. Hardcoded fallback
+    return "0.1.0"
+
+
+APP_VERSION = _resolve_app_version()
 
 APP_NAME = "Raumprognose Tool"
 APP_COPYRIGHT_YEAR = "2026"
@@ -70,11 +88,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log.setLevel(logging.DEBUG)
 
 # ── UI helper functions ───────────────────────────────────────────────────────
-
-def get_assets_dir() -> Path:
-    default_assets_dir = Path(__file__).parent / "assets"   # fallback for local runs
-    return Path(os.environ.get("FLET_ASSETS_DIR", str(default_assets_dir))).resolve()
-
 
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     """Convert a pandas DataFrame to a Flet DataTable widget."""
