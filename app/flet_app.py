@@ -15,8 +15,9 @@ import io
 import os
 import sys
 import asyncio
+import zipfile
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 import logging
 import flet as ft
 import flet_datatable2 as fdt
@@ -32,11 +33,17 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 # Ensure the app directory is on the path for sibling imports
 sys.path.insert(0, os.path.dirname(__file__))
 
-from calculations import area_by_eigentumsform, current_area_by_nutzungsart, future_demand, surplus_deficit
+from calculations import (
+    area_by_eigentumsform,
+    current_area_by_nutzungsart,
+    future_demand,
+    surplus_deficit,
+)
 from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende
 
+
 def get_assets_dir() -> Path:
-    default_assets_dir = Path(__file__).parent / "assets"   # fallback for local runs
+    default_assets_dir = Path(__file__).parent / "assets"  # fallback for local runs
     return Path(os.environ.get("FLET_ASSETS_DIR", str(default_assets_dir))).resolve()
 
 
@@ -75,7 +82,7 @@ APP_LICENSE_TEXT = (
     "3. Neither the name of the copyright holder nor the names of its contributors "
     "may be used to endorse or promote products derived from this software without "
     "specific prior written permission.\n\n"
-    "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" "
+    'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" '
     "AND WITHOUT WARRANTY OF ANY KIND."
 )
 APP_DOCUMENTATION_URL = "https://ebp-group.github.io/225310-raumprognose-tool/"
@@ -84,10 +91,13 @@ SPLASH_DURATION_SECONDS = 2
 SPLASH_FADE_OUT_MS = 300
 
 log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 log.setLevel(logging.DEBUG)
 
 # ── UI helper functions ───────────────────────────────────────────────────────
+
 
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     """Convert a pandas DataFrame to a Flet DataTable widget."""
@@ -138,6 +148,17 @@ def _fig_to_base64(fig: plt.Figure) -> str:
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
     buf.seek(0)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _build_png_zip(figs: list[tuple[str, plt.Figure]]) -> bytes:
+    """Build a ZIP archive containing PNG renders of multiple figures."""
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for filename, fig in figs:
+            png_buf = io.BytesIO()
+            fig.savefig(png_buf, format="png", dpi=150, bbox_inches="tight")
+            archive.writestr(filename, png_buf.getvalue())
+    return zip_buf.getvalue()
 
 
 # ── Chart builders ────────────────────────────────────────────────────────────
@@ -194,10 +215,12 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
 def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
     """Grouped bar chart of area demand by usage type and year."""
     fig, ax = plt.subplots(figsize=(10, 5))
-    #years = sorted(df_demand["jahr"].unique())
+    # years = sorted(df_demand["jahr"].unique())
     years = [2026, 2030, 2040, 2050]
 
-    nutzungsarten = sorted(df_demand[df_demand["Bedarf_m2"] > 0]["Nutzungsart"].unique())
+    nutzungsarten = sorted(
+        df_demand[df_demand["Bedarf_m2"] > 0]["Nutzungsart"].unique()
+    )
     x = range(len(nutzungsarten))
     width = 0.8 / max(len(years), 1)
 
@@ -221,11 +244,11 @@ def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
     return fig
 
 
-def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[plt.Figure]:
+def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[tuple[int, plt.Figure]]:
     """One bar chart per forecast year showing surplus/deficit by usage type."""
     # years = sorted(df_sd["jahr"].unique())
     years = [2026, 2030, 2040, 2050]
-    figs: list[plt.Figure] = []
+    figs: list[tuple[int, plt.Figure]] = []
     for year in years:
         fig, ax = plt.subplots(figsize=(5, 4))
         df_year = df_sd[df_sd["Jahr"] == year]
@@ -239,7 +262,7 @@ def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[plt.Figure]:
         ax.tick_params(axis="x", rotation=45)
         ax.grid(True, alpha=0.3, axis="y")
         fig.tight_layout()
-        figs.append(fig)
+        figs.append((year, fig))
     return figs
 
 
@@ -438,7 +461,6 @@ def main(page: ft.Page) -> None:
             browser_configuration=ft.BrowserConfiguration(show_title=True),
         )
 
-
     page.appbar = ft.AppBar(
         title=ft.Text("🏛️ Raumprognose Tool"),
         bgcolor=ft.Colors.SURFACE,
@@ -496,23 +518,34 @@ def main(page: ft.Page) -> None:
     # ── Mutable application state ─────────────────────────────────────────
 
     # TODO: remove hardcoded paths and use file pickers instead
-    base_path = Path(r"C:\Users\ods\OneDrive - EBP\CH_P_225310 - PE_TPF_UniSG - General\40_BEARBEITUNG\04_Auswertung\02_Datenmodell")
+    base_path = Path(
+        r"C:\Users\ods\OneDrive - EBP\CH_P_225310 - PE_TPF_UniSG - General\40_BEARBEITUNG\04_Auswertung\02_Datenmodell"
+    )
 
     state: dict[str, Any] = {
         "df_gebaeude": None,
         "df_studierende": None,
         "df_faktoren": None,
         "scenario": None,
-        "custom_gebaeude": (base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"),   # TODO: default paths for testing only, remove later
-        "custom_studierende": (base_path / "prognose_studierende_und_ma.xlsx"),         # TODO: default paths for testing only, remove later
-        "custom_faktoren": (base_path / "nutzungsfaktoren.xlsx"),                       # TODO: default paths for testing only, remove later
+        "custom_gebaeude": (
+            base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"
+        ),  # TODO: default paths for testing only, remove later
+        "custom_studierende": (
+            base_path / "prognose_studierende_und_ma.xlsx"
+        ),  # TODO: default paths for testing only, remove later
+        "custom_faktoren": (
+            base_path / "nutzungsfaktoren.xlsx"
+        ),  # TODO: default paths for testing only, remove later
     }
 
     # ── Data loading ──────────────────────────────────────────────────────
 
     def load_all_data(e) -> bool:
         """Load all three datasets. Returns *True* on success."""
-        if any(state[f"custom_{key}"] is None for key in ("gebaeude", "studierende", "faktoren")):
+        if any(
+            state[f"custom_{key}"] is None
+            for key in ("gebaeude", "studierende", "faktoren")
+        ):
             page.show_dialog(
                 ft.SnackBar(
                     content=ft.Text("Bitte zuerst alle Dateien auswählen."),
@@ -520,11 +553,11 @@ def main(page: ft.Page) -> None:
                 )
             )
             return False
-        
+
         state["df_gebaeude"] = None
         state["df_studierende"] = None
         state["df_faktoren"] = None
-        
+
         _update_scenario_options()
         rebuild_content()
         page.update()
@@ -552,10 +585,14 @@ def main(page: ft.Page) -> None:
                 )
             )
             return False
-    
+
     def run_calculations(e) -> None:
         """Run the calculations and update the content."""
-        if state["df_gebaeude"] is None or state["df_studierende"] is None or state["df_faktoren"] is None:
+        if (
+            state["df_gebaeude"] is None
+            or state["df_studierende"] is None
+            or state["df_faktoren"] is None
+        ):
             page.show_dialog(
                 ft.SnackBar(
                     content=ft.Text("Bitte zuerst alle Daten laden."),
@@ -575,7 +612,6 @@ def main(page: ft.Page) -> None:
         )
         df_sd = surplus_deficit(df_current, df_demand)
         return df_current, df_demand, df_sd
-        
 
     # ── File picker ──────────────────────────────────────────────────────
 
@@ -606,7 +642,7 @@ def main(page: ft.Page) -> None:
         else:
             state[f"custom_{key}"] = None
             label.value = "Keine Datei gewählt"
-        
+
         _update_scenario_options()
         rebuild_content()
         page.update()
@@ -619,8 +655,6 @@ def main(page: ft.Page) -> None:
 
     async def load_faktoren_file(e) -> None:
         await _pick_file("faktoren", faktoren_label)
-
-
 
     # Export handlers
     async def _save_excel(_e):
@@ -676,6 +710,65 @@ def main(page: ft.Page) -> None:
             page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
+
+    async def _save_surplus_deficit_pngs(_e):
+        _, _, df_sd = get_results()
+        figs = _create_surplus_deficit_charts(df_sd)
+
+        path = await ft.FilePicker().save_file(
+            file_name=f"ueberschuss_defizit_{state['scenario']}.zip",
+            allowed_extensions=["zip"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            zip_bytes = _build_png_zip(
+                [
+                    (f"ueberschuss_defizit_{year}_{state['scenario']}.png", fig)
+                    for year, fig in figs
+                ]
+            )
+            with open(path, "wb") as f:
+                f.write(zip_bytes)
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.update()
+
+        for _, fig in figs:
+            plt.close(fig)
+
+    async def _save_all_pngs_zip(_e):
+        _, df_demand, df_sd = get_results()
+        fig_students = _create_students_chart(state["df_studierende"])
+        fig_demand = _create_demand_chart(df_demand, state["scenario"])
+        fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
+        sd_figs = _create_surplus_deficit_charts(df_sd)
+
+        path = await ft.FilePicker().save_file(
+            file_name=f"diagramme_{state['scenario']}.zip",
+            allowed_extensions=["zip"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            zip_bytes = _build_png_zip(
+                [
+                    ("studierende.png", fig_students),
+                    (f"flaechenbedarf_{state['scenario']}.png", fig_demand),
+                    ("eigentumsform.png", fig_eigentumsform),
+                    *[
+                        (f"ueberschuss_defizit_{year}_{state['scenario']}.png", fig)
+                        for year, fig in sd_figs
+                    ],
+                ]
+            )
+            with open(path, "wb") as f:
+                f.write(zip_bytes)
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.update()
+
+        plt.close(fig_students)
+        plt.close(fig_demand)
+        plt.close(fig_eigentumsform)
+        for _, fig in sd_figs:
+            plt.close(fig)
 
     # ── Scenario dropdown ─────────────────────────────────────────────────
 
@@ -737,10 +830,9 @@ def main(page: ft.Page) -> None:
                 padding=40,
             )
             return
-        
+
         log.debug("Calculating results...")
         _, df_demand, df_sd = get_results()
-        years = sorted(df_sd["Jahr"].unique())
 
         df_studierende_display = state["df_studierende"].rename(
             columns={
@@ -770,7 +862,9 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Container(
                     content=ft.Column(
-                        [_df_to_datatable(df_studierende_display),],
+                        [
+                            _df_to_datatable(df_studierende_display),
+                        ],
                         scroll=ft.ScrollMode.AUTO,
                     ),
                     height=300,
@@ -783,9 +877,16 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Container(
                     content=ft.Column(
-                            [_df_to_datatable(state["df_faktoren"][state["df_faktoren"]["Szenario"] == state["scenario"]])],
-                            scroll=ft.ScrollMode.AUTO,
-                        ),
+                        [
+                            _df_to_datatable(
+                                state["df_faktoren"][
+                                    state["df_faktoren"]["Szenario"]
+                                    == state["scenario"]
+                                ]
+                            )
+                        ],
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
                     height=300,
                 ),
             ],
@@ -855,9 +956,15 @@ def main(page: ft.Page) -> None:
         )
 
         df_sd_display = df_sd.copy()
-        df_sd_display["Fläche"] = df_sd_display["Fläche"].map("{:,.0f}".format).str.replace(",", "\'")
-        df_sd_display["Bedarf_m2"] = df_sd_display["Bedarf_m2"].map("{:,.0f}".format).str.replace(",", "\'")
-        df_sd_display["Differenz_m2"] = df_sd_display["Differenz_m2"].map("{:,.0f}".format).str.replace(",", "\'")
+        df_sd_display["Fläche"] = (
+            df_sd_display["Fläche"].map("{:,.0f}".format).str.replace(",", "'")
+        )
+        df_sd_display["Bedarf_m2"] = (
+            df_sd_display["Bedarf_m2"].map("{:,.0f}".format).str.replace(",", "'")
+        )
+        df_sd_display["Differenz_m2"] = (
+            df_sd_display["Differenz_m2"].map("{:,.0f}".format).str.replace(",", "'")
+        )
         df_sd_display = df_sd_display.rename(
             columns={
                 "Fläche": "Ist-Fläche (m²)",
@@ -865,7 +972,6 @@ def main(page: ft.Page) -> None:
                 "Differenz_m2": "Differenz (m²)",
             }
         )
-        
 
         tab2 = ft.Column(
             [
@@ -913,7 +1019,7 @@ def main(page: ft.Page) -> None:
                 content=ft.Image(src=_fig_to_base64(fig)),
                 expand=True,
             )
-            for fig in sd_figs
+            for _, fig in sd_figs
         ]
 
         num_cols = 2
@@ -1007,8 +1113,18 @@ def main(page: ft.Page) -> None:
                             on_click=_save_eigentumsform_png,
                             icon=ft.Icons.IMAGE,
                         ),
+                        ft.Button(
+                            "📥 Überschuss/Defizit (ZIP)",
+                            on_click=_save_surplus_deficit_pngs,
+                            icon=ft.Icons.FOLDER_ZIP,
+                        ),
                     ],
                     spacing=16,
+                ),
+                ft.Button(
+                    "📦 Alle Diagramme (ZIP)",
+                    on_click=_save_all_pngs_zip,
+                    icon=ft.Icons.FOLDER_ZIP,
                 ),
             ],
             spacing=16,

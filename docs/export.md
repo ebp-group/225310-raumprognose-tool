@@ -37,13 +37,15 @@ Die Excel-Datei enthält drei Tabellenblätter:
 
 ## PNG-Export (Diagramme)
 
-Es stehen drei Schaltflächen für den Diagramm-Export zur Verfügung:
+Es stehen fünf Schaltflächen für den Diagramm-Export zur Verfügung:
 
 | Schaltfläche | Dateiname | Inhalt |
 |---|---|---|
 | `📥 Studierendenzahlen (PNG)` | `studierende.png` | Liniendiagramm der Personenzahlen nach Kategorie |
 | `📥 Flächenbedarf (PNG)` | `flaechenbedarf_<Szenario>.png` | Gruppiertes Balkendiagramm des Flächenbedarfs |
 | `📥 Eigentumsform (PNG)` | `eigentumsform.png` | Gestapeltes Balkendiagramm nach Eigentumsform |
+| `📥 Über-/Unterschuss (ZIP)` | `ueber_unterschuss_<Szenario>.zip` | Enthält vier PNG-Dateien (2026, 2030, 2040, 2050) für Über-/Unterschuss pro Nutzungsart |
+| `📦 Alle Diagramme (ZIP)` | `diagramme_<Szenario>.zip` | Enthält alle Diagramme als einzelne PNG-Dateien in einem Export |
 
 ### Exporteinstellungen
 
