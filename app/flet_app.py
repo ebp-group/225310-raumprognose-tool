@@ -716,14 +716,14 @@ def main(page: ft.Page) -> None:
         figs = _create_surplus_deficit_charts(df_sd)
 
         path = await ft.FilePicker().save_file(
-            file_name=f"ueber_unterschuss_{state['scenario']}.zip",
+            file_name=f"ueberschuss_defizit_{state['scenario']}.zip",
             allowed_extensions=["zip"],
             file_type=ft.FilePickerFileType.CUSTOM,
         )
         if path:
             zip_bytes = _build_png_zip(
                 [
-                    (f"ueber_unterschuss_{year}_{state['scenario']}.png", fig)
+                    (f"ueberschuss_defizit_{year}_{state['scenario']}.png", fig)
                     for year, fig in figs
                 ]
             )
@@ -754,7 +754,7 @@ def main(page: ft.Page) -> None:
                     (f"flaechenbedarf_{state['scenario']}.png", fig_demand),
                     ("eigentumsform.png", fig_eigentumsform),
                     *[
-                        (f"ueber_unterschuss_{year}_{state['scenario']}.png", fig)
+                        (f"ueberschuss_defizit_{year}_{state['scenario']}.png", fig)
                         for year, fig in sd_figs
                     ],
                 ]
@@ -1114,7 +1114,7 @@ def main(page: ft.Page) -> None:
                             icon=ft.Icons.IMAGE,
                         ),
                         ft.Button(
-                            "📥 Über-/Unterschuss (ZIP)",
+                            "📥 Überschuss/Defizit (ZIP)",
                             on_click=_save_surplus_deficit_pngs,
                             icon=ft.Icons.FOLDER_ZIP,
                         ),
