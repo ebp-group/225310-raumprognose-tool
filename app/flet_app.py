@@ -453,8 +453,6 @@ def main(page: ft.Page) -> None:
     page.window.height = 900
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
-    file_picker = ft.FilePicker()
-    page.overlay.append(file_picker)
 
     async def _open_documentation() -> None:
         await ft.UrlLauncher().launch_url(
@@ -633,7 +631,7 @@ def main(page: ft.Page) -> None:
             label: The sidebar :class:`ft.Text` label to update with the
                 chosen file name.
         """
-        files = await file_picker.pick_files(
+        files = await ft.FilePicker().pick_files(
             allowed_extensions=["xlsx"],
             file_type=ft.FilePickerFileType.CUSTOM,
             dialog_title=f"{key.capitalize()} (.xlsx)",
@@ -662,7 +660,7 @@ def main(page: ft.Page) -> None:
     async def _save_excel(_e):
         _, df_demand, df_sd = get_results()
         excel_bytes = _build_excel(df_sd, state["df_studierende"], df_demand)
-        path = await file_picker.save_file(
+        path = await ft.FilePicker().save_file(
             file_name=f"raumprognose_{state['scenario']}.xlsx",
             allowed_extensions=["xlsx"],
             file_type=ft.FilePickerFileType.CUSTOM,
@@ -675,7 +673,7 @@ def main(page: ft.Page) -> None:
 
     async def _save_students_png(_e):
         fig = _create_students_chart(state["df_studierende"])
-        path = await file_picker.save_file(
+        path = await ft.FilePicker().save_file(
             file_name="studierende.png",
             allowed_extensions=["png"],
             file_type=ft.FilePickerFileType.CUSTOM,
@@ -689,7 +687,7 @@ def main(page: ft.Page) -> None:
     async def _save_demand_png(_e):
         _, df_demand, _ = get_results()
         fig = _create_demand_chart(df_demand, state["scenario"])
-        path = await file_picker.save_file(
+        path = await ft.FilePicker().save_file(
             file_name=f"flaechenbedarf_{state['scenario']}.png",
             allowed_extensions=["png"],
             file_type=ft.FilePickerFileType.CUSTOM,
@@ -702,7 +700,7 @@ def main(page: ft.Page) -> None:
 
     async def _save_eigentumsform_png(_e):
         fig = _create_eigentumsform_chart(state["df_gebaeude"])
-        path = await file_picker.save_file(
+        path = await ft.FilePicker().save_file(
             file_name="eigentumsform.png",
             allowed_extensions=["png"],
             file_type=ft.FilePickerFileType.CUSTOM,
@@ -717,7 +715,7 @@ def main(page: ft.Page) -> None:
         _, _, df_sd = get_results()
         figs = _create_surplus_deficit_charts(df_sd)
 
-        path = await file_picker.save_file(
+        path = await ft.FilePicker().save_file(
             file_name=f"ueber_unterschuss_{state['scenario']}.zip",
             allowed_extensions=["zip"],
             file_type=ft.FilePickerFileType.CUSTOM,
@@ -744,7 +742,7 @@ def main(page: ft.Page) -> None:
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
         sd_figs = _create_surplus_deficit_charts(df_sd)
 
-        path = await file_picker.save_file(
+        path = await ft.FilePicker().save_file(
             file_name=f"diagramme_{state['scenario']}.zip",
             allowed_extensions=["zip"],
             file_type=ft.FilePickerFileType.CUSTOM,
