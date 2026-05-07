@@ -20,10 +20,14 @@ dev = [
     "pre-commit",
     "ruff",
     "pytest",
+    "pyinstaller",
 ]
 
 [project.scripts]
 run_pipeline = "scripts.run_pipeline:main"
+
+[tool.uv]
+package = true
 
 [tool.setuptools]
 packages = ["app", "scripts"]

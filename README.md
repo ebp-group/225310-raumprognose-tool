@@ -172,19 +172,13 @@ pre-commit run --all-files
 # Create a new release
 
 - Update the version number in pyproject.toml
-- Run `uv sync` and `uv pip install -e .` (this should update `uv.lock` with the new version number)
+- Run `uv sync --all-extras` (this should update `uv.lock` with the new version number)
 - Push the changes to GitHub and [create a new release](https://github.com/ebp-group/225310-raumprognose-tool/releases/new), generate the release notes
 - Wait for the build job to finish, this will add the Windows Build to the release
 
 ## Create the windows build locally
 
-1. Install PyInstaller
-
-```bash
-uv pip install pyinstaller
-```
-
-2. Build the windows executable
+Build the windows executable:
 
 ```bash
 uv run flet pack app/flet_app.py --name RaumprognoseTool --icon app/assets/icon.ico --add-data=app/assets:assets
