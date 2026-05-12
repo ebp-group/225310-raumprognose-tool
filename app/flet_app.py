@@ -101,7 +101,7 @@ log.setLevel(logging.DEBUG)
 
 
 def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
-    """Load display labels and colors for Nutzungsarten from config.yml."""
+    """Load display labels and colors from config.yml as (display_map, color_map)."""
     config_path = get_assets_dir() / "config.yml"
     try:
         with config_path.open("r", encoding="utf-8") as f:
@@ -175,17 +175,14 @@ def _format_display_value(value: Any, round_to: int|float = 1) -> str:
     return _replace_thousands_commas(str(value))
 
 
-def _map_nutzungsart_values(series: pd.Series) -> pd.Series:
-    """Map technical Nutzungsart values to configured display labels."""
-    return series.map(NUTZUNGSART_DISPLAY_MAP).fillna(series)
-
-
 def _apply_nutzungsart_labels(df: pd.DataFrame) -> pd.DataFrame:
     """Return a copy with mapped Nutzungsart labels when that column exists."""
     if "Nutzungsart" not in df.columns:
         return df.copy()
     mapped = df.copy()
-    mapped["Nutzungsart"] = _map_nutzungsart_values(mapped["Nutzungsart"])
+    mapped["Nutzungsart"] = mapped["Nutzungsart"].map(NUTZUNGSART_DISPLAY_MAP).fillna(
+        mapped["Nutzungsart"]
+    )
     return mapped
 
 
@@ -446,9 +443,11 @@ def _build_excel(
         ws.title = title
         header_row_index = 1
         first_data_row_index = header_row_index + 1
+        col_names = list(df.columns)
+        diff_col_idx = col_names.index(diff_col) + 1 if diff_col in col_names else None
         nutzungsart_col_idx = (
-            list(df.columns).index("Nutzungsart") + 1
-            if nutzungsart_colors is not None and "Nutzungsart" in df.columns
+            col_names.index("Nutzungsart") + 1
+            if nutzungsart_colors is not None and "Nutzungsart" in col_names
             else None
         )
         for r_idx, row in enumerate(
@@ -460,21 +459,21 @@ def _build_excel(
                     cell.font = header_font
                     cell.fill = header_fill
                     cell.alignment = center
-            elif diff_col and r_idx >= first_data_row_index:
-                col_names = list(df.columns)
-                if diff_col in col_names:
-                    c_idx = col_names.index(diff_col) + 1
-                    val = ws.cell(row=r_idx, column=c_idx).value
-                    try:
-                        if float(val) >= 0:
-                            ws.cell(row=r_idx, column=c_idx).fill = green_fill
-                        else:
-                            ws.cell(row=r_idx, column=c_idx).fill = red_fill
-                    except (TypeError, ValueError):
-                        pass
+            elif diff_col_idx is not None and r_idx >= first_data_row_index:
+                val = ws.cell(row=r_idx, column=diff_col_idx).value
+                try:
+                    if float(val) >= 0:
+                        ws.cell(row=r_idx, column=diff_col_idx).fill = green_fill
+                    else:
+                        ws.cell(row=r_idx, column=diff_col_idx).fill = red_fill
+                except (TypeError, ValueError):
+                    pass
 
             if r_idx >= first_data_row_index and nutzungsart_col_idx is not None:
-                row_color = nutzungsart_colors.iloc[r_idx - first_data_row_index]
+                color_row_idx = r_idx - first_data_row_index
+                if color_row_idx >= len(nutzungsart_colors):
+                    continue
+                row_color = nutzungsart_colors.iloc[color_row_idx]
                 if pd.notna(row_color):
                     ws.cell(row=r_idx, column=nutzungsart_col_idx).fill = PatternFill(
                         "solid",
