@@ -108,7 +108,7 @@ def load_nutzungsfaktoren(
     df = pd.read_excel(source, engine="openpyxl")
     _validate_columns(df, _NUTZUNGSFAKTOREN_COLS, os.path.basename(source))
     # multiply the factor for office by 14.5 m2
-    df[df["nutzungsart"] == "Büro"]["faktor_m2_pro_person"] = df[df["nutzungsart"] == "Büro"]["faktor_m2_pro_person"] * 14.5
+    df.loc[df["nutzungsart"] == "Büro", "faktor_m2_pro_person"] *= 14.5
     df = df.rename(columns={
         "szenario": "Szenario",
         "nutzungsart": "Nutzungsart",
