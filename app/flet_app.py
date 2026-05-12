@@ -572,6 +572,12 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
         wide.loc[nt, (yr, "SOLL")] = row["Bedarf_m2"]
         wide.loc[nt, (yr, "Differenz")] = row["Differenz_m2"]
 
+    totals = (
+        df.groupby("Jahr")[["Fläche", "Bedarf_m2", "Differenz_m2"]]
+        .sum(min_count=1)
+        .reindex(years)
+    )
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Gerundete Flächen"
@@ -627,7 +633,33 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
                         cell.fill = green_fill if float(val) >= 0 else red_fill
                     except (TypeError, ValueError):
                         pass
-    
+
+    total_row_idx = len(wide.index) + 3
+    total_label_cell = ws.cell(row=total_row_idx, column=1, value="Total")
+    total_label_cell.font = Font(bold=True)
+    total_label_cell.fill = subheader_fill
+
+    for i, yr in enumerate(years):
+        total_values = (
+            totals.loc[yr, "Fläche"],
+            totals.loc[yr, "Bedarf_m2"],
+            totals.loc[yr, "Differenz_m2"],
+        )
+        for j, val in enumerate(total_values):
+            col = 2 + i * 3 + j
+            cell = ws.cell(
+                row=total_row_idx,
+                column=col,
+                value=int(val) if pd.notna(val) else None,
+            )
+            cell.font = Font(bold=True)
+            cell.fill = subheader_fill
+            if j == 2 and pd.notna(val):
+                try:
+                    cell.fill = green_fill if float(val) >= 0 else red_fill
+                except (TypeError, ValueError):
+                    pass
+
     ws.column_dimensions["A"].width = 40
     buf = io.BytesIO()
     wb.save(buf)
