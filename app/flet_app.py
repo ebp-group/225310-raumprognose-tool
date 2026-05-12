@@ -180,8 +180,8 @@ def _apply_nutzungsart_labels(df: pd.DataFrame) -> pd.DataFrame:
     if "Nutzungsart" not in df.columns:
         return df.copy()
     mapped = df.copy()
-    mapped["Nutzungsart"] = mapped["Nutzungsart"].map(NUTZUNGSART_DISPLAY_MAP).fillna(
-        mapped["Nutzungsart"]
+    mapped["Nutzungsart"] = mapped["Nutzungsart"].apply(
+        lambda value: NUTZUNGSART_DISPLAY_MAP.get(value, value)
     )
     return mapped
 
@@ -190,7 +190,7 @@ def _nutzungsart_color_series(df: pd.DataFrame) -> pd.Series | None:
     """Return per-row Nutzungsart colors from config for the given DataFrame."""
     if "Nutzungsart" not in df.columns:
         return None
-    return df["Nutzungsart"].map(NUTZUNGSART_COLOR_MAP)
+    return df["Nutzungsart"].map(NUTZUNGSART_COLOR_MAP).reset_index(drop=True)
 
 
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200, round_to: int|float = 1) -> ft.DataTable:
