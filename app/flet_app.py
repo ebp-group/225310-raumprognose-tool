@@ -120,7 +120,9 @@ def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
         log.warning("Invalid YAML in Nutzungsart config %s: %s", config_path, exc)
         return {}, {}
     except OSError as exc:
-        log.warning("OS error while reading Nutzungsart config %s: %s", config_path, exc)
+        log.warning(
+            "OS error while reading Nutzungsart config %s: %s", config_path, exc
+        )
         return {}, {}
 
     display_map: dict[str, str] = {}
@@ -160,7 +162,9 @@ def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
     return display_map, color_map, key_order
 
 
-NUTZUNGSART_DISPLAY_MAP, NUTZUNGSART_COLOR_MAP, NUTZUNGSART_KEY_ORDER = _load_nutzungsart_config()
+NUTZUNGSART_DISPLAY_MAP, NUTZUNGSART_COLOR_MAP, NUTZUNGSART_KEY_ORDER = (
+    _load_nutzungsart_config()
+)
 
 # ── UI helper functions ───────────────────────────────────────────────────────
 
@@ -174,11 +178,15 @@ def _replace_thousands_commas(text: str) -> str:
     )
 
 
-def _format_display_value(value: Any, round_to: int|float = 1) -> str:
+def _format_display_value(value: Any, round_to: int | float = 1) -> str:
     """Format values for UI display with apostrophe thousands separators."""
     if pd.isna(value):
         return ""
-    if isinstance(value, Real) and not isinstance(value, bool) and isinstance(round_to, int):
+    if (
+        isinstance(value, Real)
+        and not isinstance(value, bool)
+        and isinstance(round_to, int)
+    ):
         value = round(value / round_to) * round_to
         return f"{value:,}".replace(",", "'")
     if isinstance(value, Real) and not isinstance(value, bool):
@@ -193,8 +201,14 @@ def _apply_nutzungsart_labels(df: pd.DataFrame) -> pd.DataFrame:
         return df.copy()
     mapped = df.copy()
 
-    mapped['NutzungsartCategorical'] = pd.Categorical(mapped['Nutzungsart'], NUTZUNGSART_KEY_ORDER)
-    mapped = mapped.sort_values('NutzungsartCategorical').drop(columns='NutzungsartCategorical').reset_index(drop=True)
+    mapped["NutzungsartCategorical"] = pd.Categorical(
+        mapped["Nutzungsart"], NUTZUNGSART_KEY_ORDER
+    )
+    mapped = (
+        mapped.sort_values("NutzungsartCategorical")
+        .drop(columns="NutzungsartCategorical")
+        .reset_index(drop=True)
+    )
 
     log.debug("Applying Nutzungsart display labels using map: %s", mapped)
 
@@ -211,7 +225,9 @@ def _nutzungsart_color_series(df: pd.DataFrame) -> pd.Series | None:
     return df["Nutzungsart"].map(NUTZUNGSART_COLOR_MAP).reset_index(drop=True)
 
 
-def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200, round_to: int|float = 1) -> ft.DataTable:
+def _df_to_datatable(
+    df: pd.DataFrame, max_rows: int = 200, round_to: int | float = 1
+) -> ft.DataTable:
     """Convert a pandas DataFrame to a Flet DataTable widget."""
     columns = [
         ft.DataColumn(label=ft.Text(str(col), weight=ft.FontWeight.BOLD))
@@ -219,7 +235,10 @@ def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200, round_to: int|float 
     ]
     rows = []
     for _, row in df.head(max_rows).iterrows():
-        cells = [ft.DataCell(ft.Text(_format_display_value(val, round_to=round_to))) for val in row]
+        cells = [
+            ft.DataCell(ft.Text(_format_display_value(val, round_to=round_to)))
+            for val in row
+        ]
         rows.append(fdt.DataRow2(cells=cells))
     return ft.DataTable(
         columns=columns,
@@ -560,9 +579,15 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
     years = sorted(df["Jahr"].unique())
 
     # Build wide DataFrame: index = Nutzungsart, columns = (year, metric)
-    usage_types = NUTZUNGSART_KEY_ORDER if NUTZUNGSART_KEY_ORDER else sorted(df["Nutzungsart"].unique())
+    usage_types = (
+        NUTZUNGSART_KEY_ORDER
+        if NUTZUNGSART_KEY_ORDER
+        else sorted(df["Nutzungsart"].unique())
+    )
     col_tuples = [(yr, label) for yr in years for label in ("IST", "SOLL", "Differenz")]
-    wide = pd.DataFrame(index=usage_types, columns=pd.MultiIndex.from_tuples(col_tuples))
+    wide = pd.DataFrame(
+        index=usage_types, columns=pd.MultiIndex.from_tuples(col_tuples)
+    )
     wide.index.name = "Nutzungsart"
 
     for _, row in df.iterrows():
@@ -571,6 +596,12 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
         wide.loc[nt, (yr, "IST")] = row["Fläche"]
         wide.loc[nt, (yr, "SOLL")] = row["Bedarf_m2"]
         wide.loc[nt, (yr, "Differenz")] = row["Differenz_m2"]
+
+    totals = (
+        df.groupby("Jahr")[["Fläche", "Bedarf_m2", "Differenz_m2"]]
+        .sum(min_count=1)
+        .reindex(years)
+    )
 
     wb = Workbook()
     ws = wb.active
@@ -596,8 +627,10 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
         ws.cell(row=1, column=col_start).fill = header_fill
         ws.cell(row=1, column=col_start).alignment = center
         ws.merge_cells(
-            start_row=1, start_column=col_start,
-            end_row=1, end_column=col_start + 2,
+            start_row=1,
+            start_column=col_start,
+            end_row=1,
+            end_column=col_start + 2,
         )
 
     for i, _yr in enumerate(years):
@@ -627,7 +660,33 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
                         cell.fill = green_fill if float(val) >= 0 else red_fill
                     except (TypeError, ValueError):
                         pass
-    
+
+    total_row_idx = len(wide.index) + 3
+    total_label_cell = ws.cell(row=total_row_idx, column=1, value="Total")
+    total_label_cell.font = Font(bold=True)
+    total_label_cell.fill = subheader_fill
+
+    for i, yr in enumerate(years):
+        total_values = (
+            totals.loc[yr, "Fläche"],
+            totals.loc[yr, "Bedarf_m2"],
+            totals.loc[yr, "Differenz_m2"],
+        )
+        for j, val in enumerate(total_values):
+            col = 2 + i * 3 + j
+            cell = ws.cell(
+                row=total_row_idx,
+                column=col,
+                value=int(val) if pd.notna(val) else None,
+            )
+            cell.font = Font(bold=True)
+            cell.fill = subheader_fill
+            if j == 2 and pd.notna(val):
+                try:
+                    cell.fill = green_fill if float(val) >= 0 else red_fill
+                except (TypeError, ValueError):
+                    pass
+
     ws.column_dimensions["A"].width = 40
     buf = io.BytesIO()
     wb.save(buf)
@@ -1154,8 +1213,8 @@ def main(page: ft.Page) -> None:
                             _df_to_datatable(
                                 _apply_nutzungsart_labels(
                                     state["df_faktoren"][
-                                    state["df_faktoren"]["Szenario"]
-                                    == state["scenario"]
+                                        state["df_faktoren"]["Szenario"]
+                                        == state["scenario"]
                                     ]
                                 ),
                                 round_to=0.1,
@@ -1189,7 +1248,11 @@ def main(page: ft.Page) -> None:
             values="Differenz_m2",
             aggfunc="first",
         )
-        pivot.index = [NUTZUNGSART_DISPLAY_MAP.get(n) for n in NUTZUNGSART_KEY_ORDER if NUTZUNGSART_DISPLAY_MAP.get(n) in pivot.index]
+        pivot.index = [
+            NUTZUNGSART_DISPLAY_MAP.get(n)
+            for n in NUTZUNGSART_KEY_ORDER
+            if NUTZUNGSART_DISPLAY_MAP.get(n) in pivot.index
+        ]
         pivot = pivot.reindex(columns=[2026, 2030, 2040, 2050], fill_value=0)
         pivot.columns = [str(c) for c in pivot.columns]
 
@@ -1228,13 +1291,19 @@ def main(page: ft.Page) -> None:
 
         df_sd_display_formatted = df_sd_display.copy()
         df_sd_display_formatted["Fläche"] = (
-            df_sd_display_formatted["Fläche"].map("{:,.0f}".format).str.replace(",", "'")
+            df_sd_display_formatted["Fläche"]
+            .map("{:,.0f}".format)
+            .str.replace(",", "'")
         )
         df_sd_display_formatted["Bedarf_m2"] = (
-            df_sd_display_formatted["Bedarf_m2"].map("{:,.0f}".format).str.replace(",", "'")
+            df_sd_display_formatted["Bedarf_m2"]
+            .map("{:,.0f}".format)
+            .str.replace(",", "'")
         )
         df_sd_display_formatted["Differenz_m2"] = (
-            df_sd_display_formatted["Differenz_m2"].map("{:,.0f}".format).str.replace(",", "'")
+            df_sd_display_formatted["Differenz_m2"]
+            .map("{:,.0f}".format)
+            .str.replace(",", "'")
         )
         df_sd_display_formatted = df_sd_display_formatted.rename(
             columns={
