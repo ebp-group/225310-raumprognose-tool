@@ -136,7 +136,7 @@ def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
 
 def _metric_card(label: str, value: str, is_surplus: bool) -> ft.Card:
     """Build a compact metric display card."""
-    formatted_value = _replace_thousands_commas(str(value))
+    formatted_value = _format_display_value(value)
     return ft.Card(
         content=ft.Container(
             content=ft.Column(
