@@ -103,7 +103,11 @@ log.setLevel(logging.DEBUG)
 
 def _replace_thousands_commas(text: str) -> str:
     """Replace thousands-separator commas with apostrophes in numeric strings."""
-    return re.sub(r"(?<=\d),(?=\d{3}(?:\D|$))", "'", text)
+    return re.sub(
+        r"\d{1,3}(?:,\d{3})+(?:\.\d+)?",
+        lambda match: match.group(0).replace(",", "'"),
+        text,
+    )
 
 
 def _format_display_value(value: Any) -> str:
