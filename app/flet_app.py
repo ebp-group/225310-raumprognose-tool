@@ -374,9 +374,10 @@ def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[tuple[int, plt.F
         ax.set_ylabel("Differenz (m²)")
         ax.set_title(str(year))
         ax.axhline(y=0, color="black", linewidth=0.5)
-        ax.tick_params(axis="x", rotation=45)
+        #ax.set_xticks(list(df_year["Nutzungsart"]))
+        ax.set_xticklabels(list(df_year["Nutzungsart"]), rotation=60, ha="right")
         ax.grid(True, alpha=0.3, axis="y")
-        fig.tight_layout()
+        #fig.tight_layout()
         figs.append((year, fig))
     return figs
 
