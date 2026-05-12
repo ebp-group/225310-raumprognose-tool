@@ -124,7 +124,16 @@ def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
         if display_name:
             display_map[str(raw_name)] = str(display_name)
         if color:
-            color_map[str(raw_name)] = str(color).lstrip("#").upper()
+            normalized_color = str(color).lstrip("#").upper()
+            if re.fullmatch(r"[0-9A-F]{6}", normalized_color):
+                color_map[str(raw_name)] = normalized_color
+            else:
+                log.warning(
+                    "Invalid color '%s' for Nutzungsart '%s' in %s",
+                    color,
+                    raw_name,
+                    config_path,
+                )
 
     return display_map, color_map
 
@@ -418,16 +427,23 @@ def _build_excel(
         nutzungsart_colors: pd.Series | None = None,
     ) -> None:
         ws.title = title
+        header_row_index = 1
+        first_data_row_index = header_row_index + 1
+        nutzungsart_col_idx = (
+            list(df.columns).index("Nutzungsart") + 1
+            if nutzungsart_colors is not None and "Nutzungsart" in df.columns
+            else None
+        )
         for r_idx, row in enumerate(
             dataframe_to_rows(df, index=False, header=True), start=1
         ):
             ws.append(row)
-            if r_idx == 1:
+            if r_idx == header_row_index:
                 for cell in ws[r_idx]:
                     cell.font = header_font
                     cell.fill = header_fill
                     cell.alignment = center
-            elif diff_col and r_idx > 1:
+            elif diff_col and r_idx >= first_data_row_index:
                 col_names = list(df.columns)
                 if diff_col in col_names:
                     c_idx = col_names.index(diff_col) + 1
@@ -440,11 +456,10 @@ def _build_excel(
                     except (TypeError, ValueError):
                         pass
 
-            if r_idx > 1 and nutzungsart_colors is not None and "Nutzungsart" in df.columns:
-                c_idx = list(df.columns).index("Nutzungsart") + 1
-                row_color = nutzungsart_colors.iloc[r_idx - 2]
+            if r_idx >= first_data_row_index and nutzungsart_col_idx is not None:
+                row_color = nutzungsart_colors.iloc[r_idx - first_data_row_index]
                 if pd.notna(row_color):
-                    ws.cell(row=r_idx, column=c_idx).fill = PatternFill(
+                    ws.cell(row=r_idx, column=nutzungsart_col_idx).fill = PatternFill(
                         "solid",
                         fgColor=str(row_color),
                     )
