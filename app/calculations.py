@@ -256,7 +256,7 @@ def area_by_eigentumsform(
     """
     with duckdb.connect(":memory:") as conn:
         conn.register("gebaeude", df_gebaeude)
-        return conn.execute(
+        df =  conn.execute(
             """
             SELECT
                 CASE
@@ -283,6 +283,11 @@ def area_by_eigentumsform(
             """,
             [years],
         ).fetchdf()
+        df.loc[df["Eigentumsform"] == "Eigenmiete", "Eigentumsform"] = "Eigentum Kanton St.Gallen - Miete temporär"
+        df.loc[df["Eigentumsform"] == "Mietliegenschaften", "Eigentumsform"] = "Eigentum Dritter - Miete temporär"
+        df.loc[df["Eigentumsform"] == "Nutzungsvereinbarung", "Eigentumsform"] = "Eigentum Kanton St.Gallen - langfristige Nutzung"
+        df.loc[df["Eigentumsform"] == "Stiftungs- und Drittliegenschaften", "Eigentumsform"] = "Eigentum Stiftungen - Miete temporär"
+        return df
 
 
 def wide_results(df_sd: pd.DataFrame) -> pd.DataFrame:
