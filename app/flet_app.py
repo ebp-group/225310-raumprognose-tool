@@ -397,6 +397,107 @@ def _build_excel(
     return buf.getvalue()
 
 
+def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
+    """Build a wide-format Excel workbook with areas rounded to the nearest 5.
+
+    The sheet has one row per usage type (``Nutzungsart``) and three columns
+    per forecast year: *IST* (available area), *SOLL* (required area) and
+    *Differenz*.  All values are rounded to the nearest 5 and contain no
+    decimal places.
+
+    Args:
+        df_sd: Output of :func:`surplus_deficit` with columns ``Nutzungsart``,
+            ``Jahr``, ``Fläche``, ``Bedarf_m2``, ``Differenz_m2``.
+
+    Returns:
+        Raw bytes of the ``.xlsx`` workbook.
+    """
+
+    def _round5(x: float) -> int:
+        """Round *x* to the nearest multiple of 5."""
+        return int(round(x / 5) * 5)
+
+    # Round numeric columns
+    df = df_sd.copy()
+    for col in ("Fläche", "Bedarf_m2", "Differenz_m2"):
+        df[col] = df[col].apply(lambda v: _round5(v) if pd.notna(v) else None)
+
+    years = sorted(df["Jahr"].unique())
+
+    # Build wide DataFrame: index = Nutzungsart, columns = (year, metric)
+    usage_types = df["Nutzungsart"].unique()
+    col_tuples = [(yr, label) for yr in years for label in ("IST", "SOLL", "Differenz")]
+    wide = pd.DataFrame(index=usage_types, columns=pd.MultiIndex.from_tuples(col_tuples))
+    wide.index.name = "Nutzungsart"
+
+    for _, row in df.iterrows():
+        yr = row["Jahr"]
+        nt = row["Nutzungsart"]
+        wide.loc[nt, (yr, "IST")] = row["Fläche"]
+        wide.loc[nt, (yr, "SOLL")] = row["Bedarf_m2"]
+        wide.loc[nt, (yr, "Differenz")] = row["Differenz_m2"]
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Gerundete Flächen"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="1F4E79")
+    subheader_fill = PatternFill("solid", fgColor="2E75B6")
+    green_fill = PatternFill("solid", fgColor="C6EFCE")
+    red_fill = PatternFill("solid", fgColor="FFC7CE")
+    center = Alignment(horizontal="center")
+
+    # Row 1: "Nutzungsart" header + year group headers (merged over 3 cols each)
+    ws.cell(row=1, column=1, value="Nutzungsart")
+    ws.cell(row=1, column=1).font = header_font
+    ws.cell(row=1, column=1).fill = header_fill
+    ws.cell(row=1, column=1).alignment = center
+
+    for i, yr in enumerate(years):
+        col_start = 2 + i * 3
+        ws.cell(row=1, column=col_start, value=int(yr))
+        ws.cell(row=1, column=col_start).font = header_font
+        ws.cell(row=1, column=col_start).fill = header_fill
+        ws.cell(row=1, column=col_start).alignment = center
+        ws.merge_cells(
+            start_row=1, start_column=col_start,
+            end_row=1, end_column=col_start + 2,
+        )
+
+    # Row 2: sub-headers IST / SOLL / Differenz per year
+    ws.cell(row=2, column=1, value="Nutzungsart")
+    ws.cell(row=2, column=1).font = header_font
+    ws.cell(row=2, column=1).fill = header_fill
+    ws.cell(row=2, column=1).alignment = center
+
+    for i, _yr in enumerate(years):
+        for j, label in enumerate(("IST", "SOLL", "Differenz")):
+            col = 2 + i * 3 + j
+            cell = ws.cell(row=2, column=col, value=label)
+            cell.font = header_font
+            cell.fill = subheader_fill
+            cell.alignment = center
+
+    # Data rows
+    for r_idx, (nt, row_data) in enumerate(wide.iterrows(), start=3):
+        ws.cell(row=r_idx, column=1, value=nt)
+        for i, yr in enumerate(years):
+            for j, metric in enumerate(("IST", "SOLL", "Differenz")):
+                col = 2 + i * 3 + j
+                val = row_data[(yr, metric)]
+                cell = ws.cell(row=r_idx, column=col, value=val)
+                if metric == "Differenz" and val is not None:
+                    try:
+                        cell.fill = green_fill if float(val) >= 0 else red_fill
+                    except (TypeError, ValueError):
+                        pass
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 # ── About dialog ─────────────────────────────────────────────────────────────
 
 
@@ -683,6 +784,20 @@ def main(page: ft.Page) -> None:
         excel_bytes = _build_excel(df_sd, state["df_studierende"], df_demand)
         path = await ft.FilePicker().save_file(
             file_name=f"raumprognose_{state['scenario']}.xlsx",
+            allowed_extensions=["xlsx"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            with open(path, "wb") as f:
+                f.write(excel_bytes)
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.update()
+
+    async def _save_excel_rounded(_e):
+        _, _, df_sd = get_results()
+        excel_bytes = _build_excel_rounded(df_sd)
+        path = await ft.FilePicker().save_file(
+            file_name=f"raumprognose_gerundet_{state['scenario']}.xlsx",
             allowed_extensions=["xlsx"],
             file_type=ft.FilePickerFileType.CUSTOM,
         )
@@ -1104,6 +1219,11 @@ def main(page: ft.Page) -> None:
                 ft.Button(
                     "📥 Ergebnisse als Excel speichern",
                     on_click=_save_excel,
+                    icon=ft.Icons.SAVE,
+                ),
+                ft.Button(
+                    "📥 Gerundete Flächen als Excel speichern",
+                    on_click=_save_excel_rounded,
                     icon=ft.Icons.SAVE,
                 ),
                 ft.Divider(),
