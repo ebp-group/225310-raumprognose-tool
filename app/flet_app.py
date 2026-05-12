@@ -125,10 +125,12 @@ def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
 
     display_map: dict[str, str] = {}
     color_map: dict[str, str] = {}
+    order_map: dict[int, str] = {}
     for entry in data.get("nutzungsarten", []):
-        raw_name = entry.get("name")
-        display_name = entry.get("column_name")
+        raw_name = entry.get("column_name")
+        display_name = entry.get("name")
         color = entry.get("color")
+        sort_order = entry.get("sort_order")
         if not raw_name:
             continue
         if display_name:
@@ -144,11 +146,21 @@ def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
                     raw_name,
                     config_path,
                 )
+        if sort_order:
+            try:
+                order_map[int(sort_order)] = str(raw_name)
+            except ValueError:
+                log.warning(
+                    "Invalid sort_order '%s' for Nutzungsart '%s' in %s",
+                    sort_order,
+                    raw_name,
+                    config_path,
+                )
+    key_order = [name for _, name in sorted(order_map.items())]
+    return display_map, color_map, key_order
 
-    return display_map, color_map
 
-
-NUTZUNGSART_DISPLAY_MAP, NUTZUNGSART_COLOR_MAP = _load_nutzungsart_config()
+NUTZUNGSART_DISPLAY_MAP, NUTZUNGSART_COLOR_MAP, NUTZUNGSART_KEY_ORDER = _load_nutzungsart_config()
 
 # ── UI helper functions ───────────────────────────────────────────────────────
 
@@ -180,6 +192,12 @@ def _apply_nutzungsart_labels(df: pd.DataFrame) -> pd.DataFrame:
     if "Nutzungsart" not in df.columns:
         return df.copy()
     mapped = df.copy()
+
+    mapped['NutzungsartCategorical'] = pd.Categorical(mapped['Nutzungsart'], NUTZUNGSART_KEY_ORDER)
+    mapped = mapped.sort_values('NutzungsartCategorical').drop(columns='NutzungsartCategorical').reset_index(drop=True)
+
+    log.debug("Applying Nutzungsart display labels using map: %s", mapped)
+
     mapped["Nutzungsart"] = mapped["Nutzungsart"].apply(
         lambda value: NUTZUNGSART_DISPLAY_MAP.get(value, value)
     )
@@ -541,7 +559,7 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
     years = sorted(df["Jahr"].unique())
 
     # Build wide DataFrame: index = Nutzungsart, columns = (year, metric)
-    usage_types = df["Nutzungsart"].unique()
+    usage_types = NUTZUNGSART_KEY_ORDER if NUTZUNGSART_KEY_ORDER else sorted(df["Nutzungsart"].unique())
     col_tuples = [(yr, label) for yr in years for label in ("IST", "SOLL", "Differenz")]
     wide = pd.DataFrame(index=usage_types, columns=pd.MultiIndex.from_tuples(col_tuples))
     wide.index.name = "Nutzungsart"
@@ -557,9 +575,9 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
     ws = wb.active
     ws.title = "Gerundete Flächen"
 
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill("solid", fgColor="1F4E79")
-    subheader_fill = PatternFill("solid", fgColor="2E75B6")
+    header_font = Font(bold=True, color="000000")
+    header_fill = PatternFill("solid", fgColor="FFFFFF")
+    subheader_fill = PatternFill("solid", fgColor="D9D9D9")
     green_fill = PatternFill("solid", fgColor="C6EFCE")
     red_fill = PatternFill("solid", fgColor="FFC7CE")
     center = Alignment(horizontal="center")
@@ -581,12 +599,6 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
             end_row=1, end_column=col_start + 2,
         )
 
-    # Row 2: sub-headers IST / SOLL / Differenz per year
-    ws.cell(row=2, column=1, value="Nutzungsart")
-    ws.cell(row=2, column=1).font = header_font
-    ws.cell(row=2, column=1).fill = header_fill
-    ws.cell(row=2, column=1).alignment = center
-
     for i, _yr in enumerate(years):
         for j, label in enumerate(("IST", "SOLL", "Differenz")):
             col = 2 + i * 3 + j
@@ -603,6 +615,7 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
         nt_color = NUTZUNGSART_COLOR_MAP.get(raw_name)
         if nt_color:
             nt_cell.fill = PatternFill("solid", fgColor=nt_color)
+            nt_cell.font = Font(color="FFFFFF")
         for i, yr in enumerate(years):
             for j, metric in enumerate(("IST", "SOLL", "Differenz")):
                 col = 2 + i * 3 + j
@@ -613,7 +626,8 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
                         cell.fill = green_fill if float(val) >= 0 else red_fill
                     except (TypeError, ValueError):
                         pass
-
+    
+    ws.column_dimensions["A"].width = 40
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -1174,6 +1188,7 @@ def main(page: ft.Page) -> None:
             values="Differenz_m2",
             aggfunc="first",
         )
+        pivot.index = [NUTZUNGSART_DISPLAY_MAP.get(n) for n in NUTZUNGSART_KEY_ORDER if NUTZUNGSART_DISPLAY_MAP.get(n) in pivot.index]
         pivot = pivot.reindex(columns=[2026, 2030, 2040, 2050], fill_value=0)
         pivot.columns = [str(c) for c in pivot.columns]
 

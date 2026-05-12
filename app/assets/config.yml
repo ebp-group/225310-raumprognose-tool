@@ -2,30 +2,40 @@ nutzungsarten:
   - name: "Pool Vortragsräume"
     column_name: "Vortrag"
     color: "#234b60"
+    sort_order: 1
   - name: "Lern & Zusammenarbeitsräume"
     column_name: "Lernen"
     color: "#af2832"
+    sort_order: 2
   - name: "Lernarbeitsplätze Fokus & Kollaboration"
     column_name: "LAP F&K"
     color: "#dfa02d"
+    sort_order: 3
   - name: "Lernarbeitsplätze Meetingplaces"
     column_name: "LAP M"
     color: "#a6741a"
+    sort_order: 4
   - name: "Sport"
     column_name: "Sport"
     color: "#58768c"
+    sort_order: 5
   - name: "Bibliothek"
     column_name: "Bibliothek"
     color: "#58768c"
+    sort_order: 6
   - name: "Gastro"
     column_name: "Gastro"
     color: "#5f915f"
+    sort_order: 7
   - name: "Spezialräume"
     column_name: "Spezialräume"
     color: "#7f7f7f"
+    sort_order: 8
   - name: "Vereine - Initiativen"
     column_name: "Vereine Initiativen"
     color: "#d36821"
+    sort_order: 9
   - name: "Büro"
     column_name: "Büro"
     color: "#8f45c7"
+    sort_order: 10
