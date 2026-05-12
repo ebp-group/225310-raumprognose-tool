@@ -928,17 +928,11 @@ def main(page: ft.Page) -> None:
             for val in row:
                 try:
                     v = float(val)
-                    bg = (
-                        ft.Colors.GREEN_100
-                        if v > 0
-                        else (ft.Colors.RED_100 if v < 0 else None)
-                    )
                     tc = "#276221" if v > 0 else ("#9c0006" if v < 0 else None)
                     cells.append(
                         ft.DataCell(
                             ft.Container(
                                 content=ft.Text(f"{v:.1f}", color=tc),
-                                bgcolor=bg,
                                 padding=8,
                             )
                         )
