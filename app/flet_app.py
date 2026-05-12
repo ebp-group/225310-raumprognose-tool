@@ -15,7 +15,9 @@ import io
 import os
 import sys
 import asyncio
+import re
 import zipfile
+from numbers import Real
 from pathlib import Path
 from typing import Any
 import logging
@@ -99,6 +101,20 @@ log.setLevel(logging.DEBUG)
 # ── UI helper functions ───────────────────────────────────────────────────────
 
 
+def _replace_thousands_commas(text: str) -> str:
+    """Replace thousands-separator commas with apostrophes in numeric strings."""
+    return re.sub(r"(?<=\d),(?=\d{3}(?:\D|$))", "'", text)
+
+
+def _format_display_value(value: Any) -> str:
+    """Format values for UI display with apostrophe thousands separators."""
+    if pd.isna(value):
+        return ""
+    if isinstance(value, Real) and not isinstance(value, bool):
+        return f"{value:,}".replace(",", "'")
+    return _replace_thousands_commas(str(value))
+
+
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     """Convert a pandas DataFrame to a Flet DataTable widget."""
     columns = [
@@ -107,7 +123,7 @@ def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     ]
     rows = []
     for _, row in df.head(max_rows).iterrows():
-        cells = [ft.DataCell(ft.Text(str(val))) for val in row]
+        cells = [ft.DataCell(ft.Text(_format_display_value(val))) for val in row]
         rows.append(fdt.DataRow2(cells=cells))
     return ft.DataTable(
         columns=columns,
@@ -120,12 +136,13 @@ def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
 
 def _metric_card(label: str, value: str, is_surplus: bool) -> ft.Card:
     """Build a compact metric display card."""
+    formatted_value = _replace_thousands_commas(str(value))
     return ft.Card(
         content=ft.Container(
             content=ft.Column(
                 [
                     ft.Text(label, size=14, color=ft.Colors.GREY_600),
-                    ft.Text(value, size=20, weight=ft.FontWeight.BOLD),
+                    ft.Text(formatted_value, size=20, weight=ft.FontWeight.BOLD),
                     ft.Text(
                         "Überschuss" if is_surplus else "Defizit",
                         size=12,
