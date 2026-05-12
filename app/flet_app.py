@@ -24,6 +24,7 @@ import logging
 import flet as ft
 import flet_datatable2 as fdt
 import matplotlib
+import yaml
 
 matplotlib.use("Agg")  # noqa: E402 – must be set before importing pyplot
 import matplotlib.pyplot as plt  # noqa: E402
@@ -98,6 +99,38 @@ logging.basicConfig(
 )
 log.setLevel(logging.DEBUG)
 
+
+def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
+    """Load display labels and colors for Nutzungsarten from config.yml."""
+    config_path = get_assets_dir() / "config.yml"
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        log.warning("Nutzungsart config not found: %s", config_path)
+        return {}, {}
+    except Exception as exc:
+        log.warning("Failed to load Nutzungsart config from %s: %s", config_path, exc)
+        return {}, {}
+
+    display_map: dict[str, str] = {}
+    color_map: dict[str, str] = {}
+    for entry in data.get("nutzungsarten", []):
+        raw_name = entry.get("name")
+        display_name = entry.get("column_name")
+        color = entry.get("color")
+        if not raw_name:
+            continue
+        if display_name:
+            display_map[str(raw_name)] = str(display_name)
+        if color:
+            color_map[str(raw_name)] = str(color).lstrip("#").upper()
+
+    return display_map, color_map
+
+
+NUTZUNGSART_DISPLAY_MAP, NUTZUNGSART_COLOR_MAP = _load_nutzungsart_config()
+
 # ── UI helper functions ───────────────────────────────────────────────────────
 
 
@@ -121,6 +154,20 @@ def _format_display_value(value: Any, round_to: int|float = 1) -> str:
         value = round(value / round_to) * round_to
         return f"{value:,.1f}".replace(",", "'")
     return _replace_thousands_commas(str(value))
+
+
+def _map_nutzungsart_values(series: pd.Series) -> pd.Series:
+    """Map technical Nutzungsart values to configured display labels."""
+    return series.map(NUTZUNGSART_DISPLAY_MAP).fillna(series)
+
+
+def _apply_nutzungsart_labels(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy with mapped Nutzungsart labels when that column exists."""
+    if "Nutzungsart" not in df.columns:
+        return df.copy()
+    mapped = df.copy()
+    mapped["Nutzungsart"] = _map_nutzungsart_values(mapped["Nutzungsart"])
+    return mapped
 
 
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200, round_to: int|float = 1) -> ft.DataTable:
@@ -240,6 +287,7 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
 def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
     """Grouped bar chart of area demand by usage type and year."""
     fig, ax = plt.subplots(figsize=(10, 5))
+    df_demand = _apply_nutzungsart_labels(df_demand)
     # years = sorted(df_demand["jahr"].unique())
     years = [2026, 2030, 2040, 2050]
 
@@ -271,6 +319,7 @@ def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
 
 def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[tuple[int, plt.Figure]]:
     """One bar chart per forecast year showing surplus/deficit by usage type."""
+    df_sd = _apply_nutzungsart_labels(df_sd)
     # years = sorted(df_sd["jahr"].unique())
     years = [2026, 2030, 2040, 2050]
     figs: list[tuple[int, plt.Figure]] = []
@@ -362,7 +411,11 @@ def _build_excel(
     center = Alignment(horizontal="center")
 
     def _write_sheet(
-        ws: Any, df: pd.DataFrame, title: str, diff_col: str | None = None
+        ws: Any,
+        df: pd.DataFrame,
+        title: str,
+        diff_col: str | None = None,
+        nutzungsart_colors: pd.Series | None = None,
     ) -> None:
         ws.title = title
         for r_idx, row in enumerate(
@@ -387,14 +440,50 @@ def _build_excel(
                     except (TypeError, ValueError):
                         pass
 
+            if r_idx > 1 and nutzungsart_colors is not None and "Nutzungsart" in df.columns:
+                c_idx = list(df.columns).index("Nutzungsart") + 1
+                row_color = nutzungsart_colors.iloc[r_idx - 2]
+                if pd.notna(row_color):
+                    ws.cell(row=r_idx, column=c_idx).fill = PatternFill(
+                        "solid",
+                        fgColor=str(row_color),
+                    )
+
+    df_results_export = df_results.copy()
+    df_results_nutzungsart_colors = (
+        df_results_export["Nutzungsart"].map(NUTZUNGSART_COLOR_MAP)
+        if "Nutzungsart" in df_results_export.columns
+        else None
+    )
+    df_results_export = _apply_nutzungsart_labels(df_results_export)
+
+    df_dem_export = df_dem.copy()
+    df_dem_nutzungsart_colors = (
+        df_dem_export["Nutzungsart"].map(NUTZUNGSART_COLOR_MAP)
+        if "Nutzungsart" in df_dem_export.columns
+        else None
+    )
+    df_dem_export = _apply_nutzungsart_labels(df_dem_export)
+
     ws1 = wb.active
-    _write_sheet(ws1, df_results, "Ergebnisse", diff_col="Differenz_m2")
+    _write_sheet(
+        ws1,
+        df_results_export,
+        "Ergebnisse",
+        diff_col="Differenz_m2",
+        nutzungsart_colors=df_results_nutzungsart_colors,
+    )
 
     ws2 = wb.create_sheet()
     _write_sheet(ws2, df_stud, "Studierende")
 
     ws3 = wb.create_sheet()
-    _write_sheet(ws3, df_dem, "Flächenbedarf")
+    _write_sheet(
+        ws3,
+        df_dem_export,
+        "Flächenbedarf",
+        nutzungsart_colors=df_dem_nutzungsart_colors,
+    )
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -485,7 +574,12 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
 
     # Data rows
     for r_idx, (nt, row_data) in enumerate(wide.iterrows(), start=3):
-        ws.cell(row=r_idx, column=1, value=nt)
+        raw_name = str(nt)
+        display_name = NUTZUNGSART_DISPLAY_MAP.get(raw_name, raw_name)
+        nt_cell = ws.cell(row=r_idx, column=1, value=display_name)
+        nt_color = NUTZUNGSART_COLOR_MAP.get(raw_name)
+        if nt_color:
+            nt_cell.fill = PatternFill("solid", fgColor=nt_color)
         for i, yr in enumerate(years):
             for j, metric in enumerate(("IST", "SOLL", "Differenz")):
                 col = 2 + i * 3 + j
@@ -973,6 +1067,7 @@ def main(page: ft.Page) -> None:
 
         log.debug("Calculating results...")
         _, df_demand, df_sd = get_results()
+        df_sd_display = _apply_nutzungsart_labels(df_sd)
 
         df_studierende_display = state["df_studierende"].rename(
             columns={
@@ -1019,10 +1114,12 @@ def main(page: ft.Page) -> None:
                     content=ft.Column(
                         [
                             _df_to_datatable(
-                                state["df_faktoren"][
+                                _apply_nutzungsart_labels(
+                                    state["df_faktoren"][
                                     state["df_faktoren"]["Szenario"]
                                     == state["scenario"]
-                                ],
+                                    ]
+                                ),
                                 round_to=0.1,
                             )
                         ],
@@ -1048,7 +1145,7 @@ def main(page: ft.Page) -> None:
             )
 
         # Pivot table with colour coding
-        pivot = df_sd.pivot_table(
+        pivot = df_sd_display.pivot_table(
             index="Nutzungsart",
             columns="Jahr",
             values="Differenz_m2",
@@ -1090,17 +1187,17 @@ def main(page: ft.Page) -> None:
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
 
-        df_sd_display = df_sd.copy()
-        df_sd_display["Fläche"] = (
-            df_sd_display["Fläche"].map("{:,.0f}".format).str.replace(",", "'")
+        df_sd_display_formatted = df_sd_display.copy()
+        df_sd_display_formatted["Fläche"] = (
+            df_sd_display_formatted["Fläche"].map("{:,.0f}".format).str.replace(",", "'")
         )
-        df_sd_display["Bedarf_m2"] = (
-            df_sd_display["Bedarf_m2"].map("{:,.0f}".format).str.replace(",", "'")
+        df_sd_display_formatted["Bedarf_m2"] = (
+            df_sd_display_formatted["Bedarf_m2"].map("{:,.0f}".format).str.replace(",", "'")
         )
-        df_sd_display["Differenz_m2"] = (
-            df_sd_display["Differenz_m2"].map("{:,.0f}".format).str.replace(",", "'")
+        df_sd_display_formatted["Differenz_m2"] = (
+            df_sd_display_formatted["Differenz_m2"].map("{:,.0f}".format).str.replace(",", "'")
         )
-        df_sd_display = df_sd_display.rename(
+        df_sd_display_formatted = df_sd_display_formatted.rename(
             columns={
                 "Fläche": "Ist-Fläche (m²)",
                 "Bedarf_m2": "Bedarf (m²)",
@@ -1133,7 +1230,7 @@ def main(page: ft.Page) -> None:
                 ),
                 ft.Container(
                     content=ft.Column(
-                        [_df_to_datatable(df_sd_display)],
+                        [_df_to_datatable(df_sd_display_formatted)],
                         scroll=ft.ScrollMode.AUTO,
                     ),
                     height=300,
