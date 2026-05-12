@@ -109,8 +109,18 @@ def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
     except FileNotFoundError:
         log.warning("Nutzungsart config not found: %s", config_path)
         return {}, {}
-    except Exception as exc:
-        log.warning("Failed to load Nutzungsart config from %s: %s", config_path, exc)
+    except PermissionError as exc:
+        log.warning(
+            "Permission denied while reading Nutzungsart config %s: %s",
+            config_path,
+            exc,
+        )
+        return {}, {}
+    except yaml.YAMLError as exc:
+        log.warning("Invalid YAML in Nutzungsart config %s: %s", config_path, exc)
+        return {}, {}
+    except OSError as exc:
+        log.warning("OS error while reading Nutzungsart config %s: %s", config_path, exc)
         return {}, {}
 
     display_map: dict[str, str] = {}
@@ -177,6 +187,13 @@ def _apply_nutzungsart_labels(df: pd.DataFrame) -> pd.DataFrame:
     mapped = df.copy()
     mapped["Nutzungsart"] = _map_nutzungsart_values(mapped["Nutzungsart"])
     return mapped
+
+
+def _nutzungsart_color_series(df: pd.DataFrame) -> pd.Series | None:
+    """Return per-row Nutzungsart colors from config for the given DataFrame."""
+    if "Nutzungsart" not in df.columns:
+        return None
+    return df["Nutzungsart"].map(NUTZUNGSART_COLOR_MAP)
 
 
 def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200, round_to: int|float = 1) -> ft.DataTable:
@@ -465,19 +482,11 @@ def _build_excel(
                     )
 
     df_results_export = df_results.copy()
-    df_results_nutzungsart_colors = (
-        df_results_export["Nutzungsart"].map(NUTZUNGSART_COLOR_MAP)
-        if "Nutzungsart" in df_results_export.columns
-        else None
-    )
+    df_results_nutzungsart_colors = _nutzungsart_color_series(df_results_export)
     df_results_export = _apply_nutzungsart_labels(df_results_export)
 
     df_dem_export = df_dem.copy()
-    df_dem_nutzungsart_colors = (
-        df_dem_export["Nutzungsart"].map(NUTZUNGSART_COLOR_MAP)
-        if "Nutzungsart" in df_dem_export.columns
-        else None
-    )
+    df_dem_nutzungsart_colors = _nutzungsart_color_series(df_dem_export)
     df_dem_export = _apply_nutzungsart_labels(df_dem_export)
 
     ws1 = wb.active
