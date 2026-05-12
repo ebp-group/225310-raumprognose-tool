@@ -110,16 +110,20 @@ def _replace_thousands_commas(text: str) -> str:
     )
 
 
-def _format_display_value(value: Any) -> str:
+def _format_display_value(value: Any, round_to: int|float = 1) -> str:
     """Format values for UI display with apostrophe thousands separators."""
     if pd.isna(value):
         return ""
-    if isinstance(value, Real) and not isinstance(value, bool):
+    if isinstance(value, Real) and not isinstance(value, bool) and isinstance(round_to, int):
+        value = round(value / round_to) * round_to
         return f"{value:,}".replace(",", "'")
+    if isinstance(value, Real) and not isinstance(value, bool):
+        value = round(value / round_to) * round_to
+        return f"{value:,.1f}".replace(",", "'")
     return _replace_thousands_commas(str(value))
 
 
-def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
+def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200, round_to: int|float = 1) -> ft.DataTable:
     """Convert a pandas DataFrame to a Flet DataTable widget."""
     columns = [
         ft.DataColumn(label=ft.Text(str(col), weight=ft.FontWeight.BOLD))
@@ -127,7 +131,7 @@ def _df_to_datatable(df: pd.DataFrame, max_rows: int = 200) -> ft.DataTable:
     ]
     rows = []
     for _, row in df.head(max_rows).iterrows():
-        cells = [ft.DataCell(ft.Text(_format_display_value(val))) for val in row]
+        cells = [ft.DataCell(ft.Text(_format_display_value(val, round_to=round_to))) for val in row]
         rows.append(fdt.DataRow2(cells=cells))
     return ft.DataTable(
         columns=columns,
@@ -1018,7 +1022,8 @@ def main(page: ft.Page) -> None:
                                 state["df_faktoren"][
                                     state["df_faktoren"]["Szenario"]
                                     == state["scenario"]
-                                ]
+                                ],
+                                round_to=0.1,
                             )
                         ],
                         scroll=ft.ScrollMode.AUTO,
@@ -1068,7 +1073,7 @@ def main(page: ft.Page) -> None:
                     cells.append(
                         ft.DataCell(
                             ft.Container(
-                                content=ft.Text(f"{v:.1f}", color=tc),
+                                content=ft.Text(_format_display_value(v), color=tc),
                                 padding=8,
                             )
                         )
