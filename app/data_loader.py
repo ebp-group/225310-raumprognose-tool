@@ -59,9 +59,14 @@ def load_gebaeude_raeume(
     """
     df = pd.read_excel(source, engine="openpyxl", header=0, usecols="A:S")
     _validate_columns(df, _GEBAEUDE_COLS, os.path.basename(source))
+    
     df = df.rename(columns={
         "Fläche m²": "Fläche",
     })
+
+    df["Betriebsaufnahme"] = pd.to_numeric(df["Betriebsaufnahme"], errors="coerce").astype("Int64")
+    df["Betriebsende"] = pd.to_numeric(df["Betriebsende"], errors="coerce").astype("Int64")
+    df["Fläche"] = pd.to_numeric(df["Fläche"], errors="coerce").astype("float64")
 
     return df[df["Raumtyp EBP"].notna()].filter(["Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche", "Betriebsaufnahme", "Betriebsende"])
 
