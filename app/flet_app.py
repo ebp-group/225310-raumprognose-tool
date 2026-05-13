@@ -380,7 +380,6 @@ def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
 def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[tuple[int, plt.Figure]]:
     """One bar chart per forecast year showing surplus/deficit by usage type."""
     df_sd = _apply_nutzungsart_labels(df_sd)
-    # years = sorted(df_sd["jahr"].unique())
     years = [2026, 2030, 2040, 2050]
     figs: list[tuple[int, plt.Figure]] = []
     for year in years:
@@ -393,7 +392,7 @@ def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[tuple[int, plt.F
         ax.set_ylabel("Differenz (m²)")
         ax.set_title(str(year))
         ax.axhline(y=0, color="black", linewidth=0.5)
-        #ax.set_xticks(list(df_year["Nutzungsart"]))
+        ax.set_xticks(range(len(list(df_year["Nutzungsart"]))))
         ax.set_xticklabels(list(df_year["Nutzungsart"]), rotation=60, ha="right")
         ax.grid(True, alpha=0.3, axis="y")
         #fig.tight_layout()

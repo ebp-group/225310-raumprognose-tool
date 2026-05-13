@@ -59,9 +59,14 @@ def load_gebaeude_raeume(
     """
     df = pd.read_excel(source, engine="openpyxl", header=0, usecols="A:S")
     _validate_columns(df, _GEBAEUDE_COLS, os.path.basename(source))
+    
     df = df.rename(columns={
         "Fläche m²": "Fläche",
     })
+
+    df["Betriebsaufnahme"] = pd.to_numeric(df["Betriebsaufnahme"], errors="coerce").astype("Int64")
+    df["Betriebsende"] = pd.to_numeric(df["Betriebsende"], errors="coerce").astype("Int64")
+    df["Fläche"] = pd.to_numeric(df["Fläche"], errors="coerce").astype("float64")
 
     return df[df["Raumtyp EBP"].notna()].filter(["Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche", "Betriebsaufnahme", "Betriebsende"])
 
@@ -107,8 +112,15 @@ def load_nutzungsfaktoren(
     """
     df = pd.read_excel(source, engine="openpyxl")
     _validate_columns(df, _NUTZUNGSFAKTOREN_COLS, os.path.basename(source))
+
+    df["faktor_m2_pro_person"] = df["faktor_m2_pro_person"].astype(float)
+    df["schritt"] = df["schritt"].astype(int)
+
     # multiply the factor for office by 14.5 m2
     df.loc[df["nutzungsart"] == "Büro", "faktor_m2_pro_person"] *= 14.5
+
+    
+
     df = df.rename(columns={
         "szenario": "Szenario",
         "nutzungsart": "Nutzungsart",
