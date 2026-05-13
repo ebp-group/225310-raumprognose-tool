@@ -112,8 +112,15 @@ def load_nutzungsfaktoren(
     """
     df = pd.read_excel(source, engine="openpyxl")
     _validate_columns(df, _NUTZUNGSFAKTOREN_COLS, os.path.basename(source))
+
+    df["faktor_m2_pro_person"] = df["faktor_m2_pro_person"].astype(float)
+    df["schritt"] = df["schritt"].astype(int)
+
     # multiply the factor for office by 14.5 m2
     df.loc[df["nutzungsart"] == "Büro", "faktor_m2_pro_person"] *= 14.5
+
+    
+
     df = df.rename(columns={
         "szenario": "Szenario",
         "nutzungsart": "Nutzungsart",
