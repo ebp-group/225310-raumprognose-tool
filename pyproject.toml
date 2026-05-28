@@ -1,6 +1,6 @@
 [project]
 name = "raumprognose-tool"
-version = "1.6.0"
+version = "1.7.0"
 description = "Raumprognose Tool – Flet desktop UI with pandas/DuckDB calculations and optional dbt batch pipeline"
 requires-python = ">=3.10"
 dependencies = [
