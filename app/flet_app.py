@@ -296,6 +296,56 @@ def _build_png_zip(figs: list[tuple[str, plt.Figure]]) -> bytes:
 # ── Chart builders ────────────────────────────────────────────────────────────
 
 
+def _compute_ylimits_across_scenarios(
+    df_studierende: pd.DataFrame,
+    df_faktoren: pd.DataFrame,
+    df_gebaeude: pd.DataFrame,
+) -> dict[str, tuple[float, float]]:
+    """Compute y-axis limits for demand and surplus/deficit charts across all scenarios.
+
+    Returns a dict with keys 'demand' and 'surplus_deficit', each mapping to a
+    (y_min, y_max) tuple that covers the full range of values across all scenarios.
+    A 5% margin is added to both sides for visual clarity.
+    """
+    scenarios = sorted(df_faktoren["Szenario"].unique().tolist())
+    years = sorted(df_studierende["Jahr"].unique().tolist())
+
+    demand_min = float("inf")
+    demand_max = float("-inf")
+    sd_min = float("inf")
+    sd_max = float("-inf")
+
+    df_current = current_area_by_nutzungsart(df_gebaeude, years)
+
+    for scenario in scenarios:
+        df_demand = future_demand(df_studierende, df_faktoren, scenario)
+        if not df_demand.empty:
+            vals = df_demand["Bedarf_m2"].dropna()
+            if len(vals) > 0:
+                demand_min = min(demand_min, vals.min())
+                demand_max = max(demand_max, vals.max())
+
+        df_sd = surplus_deficit(df_current, df_demand)
+        if not df_sd.empty:
+            vals = df_sd["Differenz_m2"].dropna()
+            if len(vals) > 0:
+                sd_min = min(sd_min, vals.min())
+                sd_max = max(sd_max, vals.max())
+
+    # Add 5% margin for visual clarity
+    def _add_margin(vmin: float, vmax: float) -> tuple[float, float]:
+        if vmin == float("inf") or vmax == float("-inf"):
+            return (0, 1)
+        span = vmax - vmin
+        margin = span * 0.05 if span > 0 else 1
+        return (vmin - margin, vmax + margin)
+
+    return {
+        "demand": _add_margin(0, demand_max),
+        "surplus_deficit": _add_margin(sd_min, sd_max),
+    }
+
+
 def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
     """Line chart with one line per category over time."""
     fig, ax = plt.subplots(figsize=(8, 4))
@@ -344,7 +394,9 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
     return fig
 
 
-def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
+def _create_demand_chart(
+    df_demand: pd.DataFrame, scenario: str, ylim: tuple[float, float] | None = None
+) -> plt.Figure:
     """Grouped bar chart of area demand by usage type and year."""
     fig, ax = plt.subplots(figsize=(10, 5))
     df_demand = _apply_nutzungsart_labels(df_demand)
@@ -373,11 +425,15 @@ def _create_demand_chart(df_demand: pd.DataFrame, scenario: str) -> plt.Figure:
     ax.set_xticklabels(nutzungsarten, rotation=45, ha="right")
     ax.legend()
     ax.grid(True, alpha=0.3, axis="y")
+    if ylim is not None:
+        ax.set_ylim(ylim)
     fig.tight_layout()
     return fig
 
 
-def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[tuple[int, plt.Figure]]:
+def _create_surplus_deficit_charts(
+    df_sd: pd.DataFrame, ylim: tuple[float, float] | None = None
+) -> list[tuple[int, plt.Figure]]:
     """One bar chart per forecast year showing surplus/deficit by usage type."""
     df_sd = _apply_nutzungsart_labels(df_sd)
     years = [2026, 2030, 2040, 2050]
@@ -395,6 +451,8 @@ def _create_surplus_deficit_charts(df_sd: pd.DataFrame) -> list[tuple[int, plt.F
         ax.set_xticks(range(len(list(df_year["Nutzungsart"]))))
         ax.set_xticklabels(list(df_year["Nutzungsart"]), rotation=60, ha="right")
         ax.grid(True, alpha=0.3, axis="y")
+        if ylim is not None:
+            ax.set_ylim(ylim)
         #fig.tight_layout()
         figs.append((year, fig))
     return figs
@@ -843,6 +901,7 @@ def main(page: ft.Page) -> None:
         "df_studierende": None,
         "df_faktoren": None,
         "scenario": None,
+        "ylimits": None,
         "custom_gebaeude": (
             base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"
         ),  # TODO: default paths for testing only, remove later
@@ -1016,7 +1075,10 @@ def main(page: ft.Page) -> None:
 
     async def _save_demand_png(_e):
         _, df_demand, _ = get_results()
-        fig = _create_demand_chart(df_demand, state["scenario"])
+        ylimits = state["ylimits"] or _compute_ylimits_across_scenarios(
+            state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
+        )
+        fig = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
         path = await ft.FilePicker().save_file(
             file_name=f"flaechenbedarf_{state['scenario']}.png",
             allowed_extensions=["png"],
@@ -1043,7 +1105,10 @@ def main(page: ft.Page) -> None:
 
     async def _save_surplus_deficit_pngs(_e):
         _, _, df_sd = get_results()
-        figs = _create_surplus_deficit_charts(df_sd)
+        ylimits = state["ylimits"] or _compute_ylimits_across_scenarios(
+            state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
+        )
+        figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
 
         path = await ft.FilePicker().save_file(
             file_name=f"ueberschuss_defizit_{state['scenario']}.zip",
@@ -1067,10 +1132,13 @@ def main(page: ft.Page) -> None:
 
     async def _save_all_pngs_zip(_e):
         _, df_demand, df_sd = get_results()
+        ylimits = state["ylimits"] or _compute_ylimits_across_scenarios(
+            state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
+        )
         fig_students = _create_students_chart(state["df_studierende"])
-        fig_demand = _create_demand_chart(df_demand, state["scenario"])
+        fig_demand = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
-        sd_figs = _create_surplus_deficit_charts(df_sd)
+        sd_figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
 
         path = await ft.FilePicker().save_file(
             file_name=f"diagramme_{state['scenario']}.zip",
@@ -1163,6 +1231,10 @@ def main(page: ft.Page) -> None:
 
         log.debug("Calculating results...")
         _, df_demand, df_sd = get_results()
+        ylimits = _compute_ylimits_across_scenarios(
+            state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
+        )
+        state["ylimits"] = ylimits
         df_sd_display = _apply_nutzungsart_labels(df_sd)
 
         df_studierende_display = state["df_studierende"].rename(
@@ -1349,9 +1421,9 @@ def main(page: ft.Page) -> None:
 
         # ── Tab 3: Diagramme ─────────────────────────────────────────────
         fig_students = _create_students_chart(state["df_studierende"])
-        fig_demand = _create_demand_chart(df_demand, state["scenario"])
+        fig_demand = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
-        sd_figs = _create_surplus_deficit_charts(df_sd)
+        sd_figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
 
         sd_chart_controls: list[ft.Control] = [
             ft.Container(
