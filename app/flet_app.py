@@ -341,7 +341,7 @@ def _compute_ylimits_across_scenarios(
         return (vmin - margin, vmax + margin)
 
     return {
-        "demand": _add_margin(min(demand_min, 0), demand_max),
+        "demand": _add_margin(0, demand_max),
         "surplus_deficit": _add_margin(sd_min, sd_max),
     }
 
@@ -901,6 +901,7 @@ def main(page: ft.Page) -> None:
         "df_studierende": None,
         "df_faktoren": None,
         "scenario": None,
+        "ylimits": None,
         "custom_gebaeude": (
             base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"
         ),  # TODO: default paths for testing only, remove later
@@ -1074,7 +1075,7 @@ def main(page: ft.Page) -> None:
 
     async def _save_demand_png(_e):
         _, df_demand, _ = get_results()
-        ylimits = _compute_ylimits_across_scenarios(
+        ylimits = state["ylimits"] or _compute_ylimits_across_scenarios(
             state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
         )
         fig = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
@@ -1104,7 +1105,7 @@ def main(page: ft.Page) -> None:
 
     async def _save_surplus_deficit_pngs(_e):
         _, _, df_sd = get_results()
-        ylimits = _compute_ylimits_across_scenarios(
+        ylimits = state["ylimits"] or _compute_ylimits_across_scenarios(
             state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
         )
         figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
@@ -1131,7 +1132,7 @@ def main(page: ft.Page) -> None:
 
     async def _save_all_pngs_zip(_e):
         _, df_demand, df_sd = get_results()
-        ylimits = _compute_ylimits_across_scenarios(
+        ylimits = state["ylimits"] or _compute_ylimits_across_scenarios(
             state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
         )
         fig_students = _create_students_chart(state["df_studierende"])
@@ -1233,6 +1234,7 @@ def main(page: ft.Page) -> None:
         ylimits = _compute_ylimits_across_scenarios(
             state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
         )
+        state["ylimits"] = ylimits
         df_sd_display = _apply_nutzungsart_labels(df_sd)
 
         df_studierende_display = state["df_studierende"].rename(
