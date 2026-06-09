@@ -38,8 +38,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies (including dev extras)
-        run: uv sync --all-extras
+      - name: Install dependencies
+        run: uv sync
 
       - name: Run tests
         run: uv run pytest
