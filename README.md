@@ -62,7 +62,7 @@ The tool supports two workflows:
 
 ```bash
 uv venv
-uv sync --all-extras
+uv sync
 source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 ```
 
@@ -172,7 +172,7 @@ pre-commit run --all-files
 # Create a new release
 
 - Update the version number in pyproject.toml
-- Run `uv sync --all-extras` (this should update `uv.lock` with the new version number)
+- Run `uv sync` (this should update `uv.lock` with the new version number)
 - Push the changes to GitHub and [create a new release](https://github.com/ebp-group/225310-raumprognose-tool/releases/new), generate the release notes
 - Wait for the build job to finish, this will add the Windows Build to the release
 

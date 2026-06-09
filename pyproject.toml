@@ -14,7 +14,10 @@ dependencies = [
     "marimo",
 ]
 
-[project.optional-dependencies]
+[project.scripts]
+run_pipeline = "scripts.run_pipeline:main"
+
+[dependency-groups]
 dev = [
     "black",
     "pre-commit",
@@ -23,11 +26,9 @@ dev = [
     "pyinstaller",
 ]
 
-[project.scripts]
-run_pipeline = "scripts.run_pipeline:main"
-
 [tool.uv]
 package = true
+default-groups = ["dev"]
 
 [tool.setuptools]
 packages = ["app", "scripts"]
