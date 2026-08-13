@@ -32,6 +32,7 @@ import matplotlib.ticker as mticker  # noqa: E402
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 # Ensure the app directory is on the path for sibling imports
@@ -654,6 +655,12 @@ def _create_flaechenpotenzial_chart(
 
 # ── Excel export builder ─────────────────────────────────────────────────────
 
+_M2_NUMBER_FORMAT = '#,##0" m²"'
+_POSITIVE_DIFF_FONT = Font(bold=True, color="006100")
+_NEGATIVE_DIFF_FONT = Font(bold=True, color="9C0006")
+_NUMBER_COLUMN_WIDTH = 14
+_VISIBLE_YEARS = {2025, 2030, 2040, 2050}
+
 
 def _build_excel(
     df_results: pd.DataFrame,
@@ -674,8 +681,6 @@ def _build_excel(
 
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="1F4E79")
-    green_fill = PatternFill("solid", fgColor="C6EFCE")
-    red_fill = PatternFill("solid", fgColor="FFC7CE")
     center = Alignment(horizontal="center")
 
     def _write_sheet(
@@ -684,12 +689,16 @@ def _build_excel(
         title: str,
         diff_col: str | None = None,
         nutzungsart_colors: pd.Series | None = None,
+        area_cols: list[str] | None = None,
     ) -> None:
         ws.title = title
         header_row_index = 1
         first_data_row_index = header_row_index + 1
         col_names = list(df.columns)
         diff_col_idx = col_names.index(diff_col) + 1 if diff_col in col_names else None
+        area_col_idxs = [
+            col_names.index(col) + 1 for col in (area_cols or []) if col in col_names
+        ]
         nutzungsart_col_idx = (
             col_names.index("Nutzungsart") + 1
             if nutzungsart_colors is not None and "Nutzungsart" in col_names
@@ -704,17 +713,21 @@ def _build_excel(
                     cell.font = header_font
                     cell.fill = header_fill
                     cell.alignment = center
-            elif diff_col_idx is not None and r_idx >= first_data_row_index:
+                continue
+
+            for col_idx in area_col_idxs:
+                ws.cell(row=r_idx, column=col_idx).number_format = _M2_NUMBER_FORMAT
+
+            if diff_col_idx is not None:
                 val = ws.cell(row=r_idx, column=diff_col_idx).value
                 try:
-                    if float(val) >= 0:
-                        ws.cell(row=r_idx, column=diff_col_idx).fill = green_fill
-                    else:
-                        ws.cell(row=r_idx, column=diff_col_idx).fill = red_fill
+                    ws.cell(row=r_idx, column=diff_col_idx).font = (
+                        _POSITIVE_DIFF_FONT if float(val) >= 0 else _NEGATIVE_DIFF_FONT
+                    )
                 except (TypeError, ValueError):
                     pass
 
-            if r_idx >= first_data_row_index and nutzungsart_col_idx is not None:
+            if nutzungsart_col_idx is not None:
                 color_row_idx = r_idx - first_data_row_index
                 if color_row_idx >= len(nutzungsart_colors):
                     continue
@@ -724,6 +737,10 @@ def _build_excel(
                         "solid",
                         fgColor=str(row_color),
                     )
+
+        for col_idx, col in enumerate(col_names, start=1):
+            if pd.api.types.is_numeric_dtype(df[col]):
+                ws.column_dimensions[get_column_letter(col_idx)].width = _NUMBER_COLUMN_WIDTH
 
     df_results_export = df_results.copy()
     df_results_nutzungsart_colors = _nutzungsart_color_series(df_results_export)
@@ -740,6 +757,7 @@ def _build_excel(
         "Ergebnisse",
         diff_col="Differenz_m2",
         nutzungsart_colors=df_results_nutzungsart_colors,
+        area_cols=["Fläche", "Bedarf_m2", "Differenz_m2"],
     )
 
     ws2 = wb.create_sheet()
@@ -751,6 +769,7 @@ def _build_excel(
         df_dem_export,
         "Flächenbedarf",
         nutzungsart_colors=df_dem_nutzungsart_colors,
+        area_cols=["Bedarf_m2"],
     )
 
     buf = io.BytesIO()
@@ -817,8 +836,6 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
     header_font = Font(bold=True, color="000000")
     header_fill = PatternFill("solid", fgColor="FFFFFF")
     subheader_fill = PatternFill("solid", fgColor="D9D9D9")
-    green_fill = PatternFill("solid", fgColor="C6EFCE")
-    red_fill = PatternFill("solid", fgColor="FFC7CE")
     center = Alignment(horizontal="center")
 
     # Row 1: "Nutzungsart" header + year group headers (merged over 3 cols each)
@@ -862,9 +879,13 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
                 col = 2 + i * 3 + j
                 val = row_data[(yr, metric)]
                 cell = ws.cell(row=r_idx, column=col, value=val)
+                if val is not None:
+                    cell.number_format = _M2_NUMBER_FORMAT
                 if metric == "Differenz" and val is not None:
                     try:
-                        cell.fill = green_fill if float(val) >= 0 else red_fill
+                        cell.font = (
+                            _POSITIVE_DIFF_FONT if float(val) >= 0 else _NEGATIVE_DIFF_FONT
+                        )
                     except (TypeError, ValueError):
                         pass
 
@@ -888,13 +909,25 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
             )
             cell.font = Font(bold=True)
             cell.fill = subheader_fill
-            if j == 2 and pd.notna(val):
-                try:
-                    cell.fill = green_fill if float(val) >= 0 else red_fill
-                except (TypeError, ValueError):
-                    pass
+            if pd.notna(val):
+                cell.number_format = _M2_NUMBER_FORMAT
+                if j == 2:
+                    try:
+                        cell.font = (
+                            _POSITIVE_DIFF_FONT if float(val) >= 0 else _NEGATIVE_DIFF_FONT
+                        )
+                    except (TypeError, ValueError):
+                        pass
 
     ws.column_dimensions["A"].width = 40
+    for i, yr in enumerate(years):
+        col_start = 2 + i * 3
+        hide_year = int(yr) not in _VISIBLE_YEARS
+        for offset in range(3):
+            col_letter = get_column_letter(col_start + offset)
+            ws.column_dimensions[col_letter].width = _NUMBER_COLUMN_WIDTH
+            ws.column_dimensions[col_letter].hidden = hide_year
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
