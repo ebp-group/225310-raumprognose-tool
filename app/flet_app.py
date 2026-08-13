@@ -300,6 +300,15 @@ def _build_png_zip(figs: list[tuple[str, plt.Figure]]) -> bytes:
     return zip_buf.getvalue()
 
 
+def _open_file(path: str) -> None:
+    """Open *path* with the OS-registered default application, if supported."""
+    if hasattr(os, "startfile"):
+        try:
+            os.startfile(path)  # noqa: S606 – opening a file this app just wrote
+        except OSError as exc:
+            log.warning("Could not open file %s: %s", path, exc)
+
+
 # ── Chart builders ────────────────────────────────────────────────────────────
 
 
@@ -1189,6 +1198,7 @@ def main(page: ft.Page) -> None:
                 f.write(excel_bytes)
             page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
+            _open_file(path)
 
     async def _save_excel_rounded(_e):
         _, _, df_sd = get_results()
@@ -1203,6 +1213,7 @@ def main(page: ft.Page) -> None:
                 f.write(excel_bytes)
             page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
+            _open_file(path)
 
     async def _save_students_png(_e):
         fig = _create_students_chart(state["df_studierende"])
