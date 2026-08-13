@@ -378,7 +378,6 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
         ax.plot(
             chart_df["Jahr"],
             chart_df[label],
-            marker="o",
             linewidth=2,
             label=label,
             color=palette(idx % palette.N),
@@ -387,6 +386,8 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
     ax.set_xlabel("Jahr")
     ax.set_ylabel("Anzahl")
     ax.set_title("Entwicklung nach Kategorie")
+    # TODO: this is hardcoded to be consistent between the two prognoses, the maximum should be computed dynamically
+    ax.set_ylim(top=12000) 
     if ax.lines:
         ax.legend()
     ax.grid(True, alpha=0.3)
