@@ -656,6 +656,7 @@ def _create_flaechenpotenzial_chart(
 # ── Excel export builder ─────────────────────────────────────────────────────
 
 _M2_NUMBER_FORMAT = '#,##0" m²"'
+_HEADCOUNT_NUMBER_FORMAT = "#,##0"
 _POSITIVE_DIFF_FONT = Font(bold=True, color="006100")
 _NEGATIVE_DIFF_FONT = Font(bold=True, color="9C0006")
 _NUMBER_COLUMN_WIDTH = 14
@@ -777,7 +778,7 @@ def _build_excel(
     return buf.getvalue()
 
 
-def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
+def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> bytes:
     """Build a wide-format Excel workbook with areas rounded to the nearest 5.
 
     The sheet has one row per usage type (``Nutzungsart``) and three columns
@@ -785,9 +786,23 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
     *Differenz*.  All values are rounded to the nearest 5 and contain no
     decimal places.
 
+    Beyond the plain per-usage-type rows, the sheet also has:
+      - a "Total Lehre HNF 1 / 3 / 5" subtotal over every usage type except
+        "Büro", followed by an "Anzahl Studierende" row (student headcount
+        per year, in the SOLL column only);
+      - the "Büro" row, followed by a "Total Büro HNF 2" subtotal (identical
+        to the Büro row itself, since it's the only usage type in that
+        group), followed by an "Anzahl Mitarbeitende" row (staff headcount
+        per year, in the SOLL column only);
+      - the grand "Total Lehre und Büro HNF 1 / 2 / 3 / 5" row at the end.
+
     Args:
         df_sd: Output of :func:`surplus_deficit` with columns ``Nutzungsart``,
             ``Jahr``, ``Fläche``, ``Bedarf_m2``, ``Differenz_m2``.
+        df_studierende: Student/staff numbers DataFrame in long format with
+            columns ``Jahr``, ``Kategorie``, ``Anzahl``. Rows with
+            ``Kategorie == "Studierende"`` are counted as students; every
+            other Kategorie is counted as staff ("Mitarbeitende").
 
     Returns:
         Raw bytes of the ``.xlsx`` workbook.
@@ -810,6 +825,9 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
         if NUTZUNGSART_KEY_ORDER
         else sorted(df["Nutzungsart"].unique())
     )
+    buero_types = [nt for nt in usage_types if nt == "Büro"]
+    lehre_types = [nt for nt in usage_types if nt not in buero_types]
+
     col_tuples = [(yr, label) for yr in years for label in ("IST", "SOLL", "Differenz")]
     wide = pd.DataFrame(
         index=usage_types, columns=pd.MultiIndex.from_tuples(col_tuples)
@@ -829,6 +847,22 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
         .reindex(years)
     )
 
+    students_by_year = (
+        df_studierende[df_studierende["Kategorie"] == "Studierende"]
+        .groupby("Jahr")["Anzahl"]
+        .sum()
+    )
+    staff_by_year = (
+        df_studierende[df_studierende["Kategorie"] != "Studierende"]
+        .groupby("Jahr")["Anzahl"]
+        .sum()
+    )
+
+    def _partial_total(nts: list[str], yr: int, metric: str) -> float | None:
+        vals = [wide.loc[nt, (yr, metric)] for nt in nts if nt in wide.index]
+        vals = [v for v in vals if pd.notna(v)]
+        return sum(vals) if vals else None
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Gerundete Flächen"
@@ -837,9 +871,10 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
     header_fill = PatternFill("solid", fgColor="FFFFFF")
     subheader_fill = PatternFill("solid", fgColor="D9D9D9")
     center = Alignment(horizontal="center")
+    left = Alignment(horizontal="left")
 
-    # Row 1: "Nutzungsart" header + year group headers (merged over 3 cols each)
-    ws.cell(row=1, column=1, value="Nutzungsart")
+    # Row 1: "Raumtypen" header + year group headers (merged over 3 cols each)
+    ws.cell(row=1, column=1, value="Raumtypen")
     ws.cell(row=1, column=1).font = header_font
     ws.cell(row=1, column=1).fill = header_fill
     ws.cell(row=1, column=1).alignment = center
@@ -849,7 +884,7 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
         ws.cell(row=1, column=col_start, value=int(yr))
         ws.cell(row=1, column=col_start).font = header_font
         ws.cell(row=1, column=col_start).fill = header_fill
-        ws.cell(row=1, column=col_start).alignment = center
+        ws.cell(row=1, column=col_start).alignment = left
         ws.merge_cells(
             start_row=1,
             start_column=col_start,
@@ -865,8 +900,7 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
             cell.fill = subheader_fill
             cell.alignment = center
 
-    # Data rows
-    for r_idx, (nt, row_data) in enumerate(wide.iterrows(), start=3):
+    def _write_data_row(r_idx: int, nt: str) -> None:
         raw_name = str(nt)
         display_name = NUTZUNGSART_DISPLAY_MAP.get(raw_name, raw_name)
         nt_cell = ws.cell(row=r_idx, column=1, value=display_name)
@@ -877,7 +911,7 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
         for i, yr in enumerate(years):
             for j, metric in enumerate(("IST", "SOLL", "Differenz")):
                 col = 2 + i * 3 + j
-                val = row_data[(yr, metric)]
+                val = wide.loc[nt, (yr, metric)]
                 cell = ws.cell(row=r_idx, column=col, value=val)
                 if val is not None:
                     cell.number_format = _M2_NUMBER_FORMAT
@@ -889,35 +923,73 @@ def _build_excel_rounded(df_sd: pd.DataFrame) -> bytes:
                     except (TypeError, ValueError):
                         pass
 
-    total_row_idx = len(wide.index) + 3
-    total_label_cell = ws.cell(row=total_row_idx, column=1, value="Total")
-    total_label_cell.font = Font(bold=True)
-    total_label_cell.fill = subheader_fill
+    def _write_total_row(r_idx: int, label: str, values_by_metric) -> None:
+        """Write a bold, grey-filled subtotal/total row. *values_by_metric*
+        maps ``(yr, metric)`` to a numeric value or ``None``."""
+        label_cell = ws.cell(row=r_idx, column=1, value=label)
+        label_cell.font = Font(bold=True)
+        label_cell.fill = subheader_fill
+        for i, yr in enumerate(years):
+            for j, metric in enumerate(("IST", "SOLL", "Differenz")):
+                col = 2 + i * 3 + j
+                val = values_by_metric(yr, metric)
+                cell = ws.cell(
+                    row=r_idx,
+                    column=col,
+                    value=int(val) if pd.notna(val) else None,
+                )
+                cell.font = Font(bold=True)
+                cell.fill = subheader_fill
+                if pd.notna(val):
+                    cell.number_format = _M2_NUMBER_FORMAT
+                    if metric == "Differenz":
+                        try:
+                            cell.font = (
+                                _POSITIVE_DIFF_FONT if float(val) >= 0 else _NEGATIVE_DIFF_FONT
+                            )
+                        except (TypeError, ValueError):
+                            pass
 
-    for i, yr in enumerate(years):
-        total_values = (
-            totals.loc[yr, "Fläche"],
-            totals.loc[yr, "Bedarf_m2"],
-            totals.loc[yr, "Differenz_m2"],
+    def _write_headcount_row(r_idx: int, label: str, counts_by_year: pd.Series) -> None:
+        """Write an italic, unfilled row with the headcount in the SOLL column only."""
+        label_cell = ws.cell(row=r_idx, column=1, value=label)
+        label_cell.font = Font(italic=True)
+        for i, yr in enumerate(years):
+            for j in range(3):
+                col = 2 + i * 3 + j
+                cell = ws.cell(row=r_idx, column=col)
+                cell.font = Font(italic=True)
+                if j == 1:  # SOLL column
+                    count = counts_by_year.get(yr)
+                    if pd.notna(count):
+                        cell.value = int(count)
+                        cell.number_format = _HEADCOUNT_NUMBER_FORMAT
+
+    row_specs: list[tuple] = (
+        [("data", nt) for nt in lehre_types]
+        + [("total", "Total Lehre HNF 1 / 3 / 5", lambda yr, m: _partial_total(lehre_types, yr, m))]
+        + [("headcount", "Anzahl Studierende", students_by_year)]
+        + [("blank",)]
+        + [("data", nt) for nt in buero_types]
+        + (
+            [("total", "Total Büro HNF 2", lambda yr, m: _partial_total(buero_types, yr, m))]
+            if buero_types
+            else []
         )
-        for j, val in enumerate(total_values):
-            col = 2 + i * 3 + j
-            cell = ws.cell(
-                row=total_row_idx,
-                column=col,
-                value=int(val) if pd.notna(val) else None,
-            )
-            cell.font = Font(bold=True)
-            cell.fill = subheader_fill
-            if pd.notna(val):
-                cell.number_format = _M2_NUMBER_FORMAT
-                if j == 2:
-                    try:
-                        cell.font = (
-                            _POSITIVE_DIFF_FONT if float(val) >= 0 else _NEGATIVE_DIFF_FONT
-                        )
-                    except (TypeError, ValueError):
-                        pass
+        + [("headcount", "Anzahl Mitarbeitende", staff_by_year)]
+        + [("blank",), ("blank",)]
+        + [("total", "Total Lehre und Büro HNF 1 / 2 / 3 / 5", lambda yr, m: totals.loc[yr, {"IST": "Fläche", "SOLL": "Bedarf_m2", "Differenz": "Differenz_m2"}[m]])]
+    )
+
+    for r_idx, spec in enumerate(row_specs, start=3):
+        kind = spec[0]
+        if kind == "data":
+            _write_data_row(r_idx, spec[1])
+        elif kind == "total":
+            _write_total_row(r_idx, spec[1], spec[2])
+        elif kind == "headcount":
+            _write_headcount_row(r_idx, spec[1], spec[2])
+        # "blank": nothing to write, row stays empty
 
     ws.column_dimensions["A"].width = 40
     for i, yr in enumerate(years):
@@ -1235,7 +1307,7 @@ def main(page: ft.Page) -> None:
 
     async def _save_excel_rounded(_e):
         _, _, df_sd = get_results()
-        excel_bytes = _build_excel_rounded(df_sd)
+        excel_bytes = _build_excel_rounded(df_sd, state["df_studierende"])
         path = await ft.FilePicker().save_file(
             file_name=f"raumprognose_gerundet_{state['scenario']}.xlsx",
             allowed_extensions=["xlsx"],
