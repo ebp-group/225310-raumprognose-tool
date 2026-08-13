@@ -1629,7 +1629,9 @@ def main(page: ft.Page) -> None:
                     weight=ft.FontWeight.BOLD,
                 ),
                 ft.Row(
-                    [
+                    wrap=True,
+                    run_spacing=16,
+                    controls=[
                         ft.Button(
                             "📥 Studierendenzahlen (PNG)",
                             on_click=_save_students_png,
