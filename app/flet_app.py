@@ -28,6 +28,7 @@ import yaml
 
 matplotlib.use("Agg")  # noqa: E402 – must be set before importing pyplot
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.ticker as mticker  # noqa: E402
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -432,25 +433,46 @@ def _create_demand_chart(
     return fig
 
 
+_RAUMTYP_FALLBACK_COLOR = "#7f7f7f"
+
+
 def _create_surplus_deficit_charts(
     df_sd: pd.DataFrame, ylim: tuple[float, float] | None = None
 ) -> list[tuple[int, plt.Figure]]:
-    """One bar chart per forecast year showing surplus/deficit by usage type."""
+    """One bar chart per forecast year showing surplus/deficit by Raumtyp."""
+    df_sd = df_sd.reset_index(drop=True)
+    df_sd["_RaumtypColor"] = _nutzungsart_color_series(df_sd).to_numpy()
     df_sd = _apply_nutzungsart_labels(df_sd)
+
     years = [2026, 2030, 2040, 2050]
+
+    if ylim is None:
+        vals = df_sd["Differenz_m2"].dropna()
+        if len(vals) > 0:
+            vmin, vmax = float(vals.min()), float(vals.max())
+            span = vmax - vmin
+            margin = span * 0.05 if span > 0 else 1
+            ylim = (min(vmin - margin, 0), vmax + margin)
+
     figs: list[tuple[int, plt.Figure]] = []
     for year in years:
         fig, ax = plt.subplots(figsize=(5, 4))
         df_year = df_sd[df_sd["Jahr"] == year]
         df_year = df_year.dropna(subset=["Differenz_m2"])
-        colors = ["#2ecc71" if v >= 0 else "#e74c3c" for v in df_year["Differenz_m2"]]
+        colors = [
+            f"#{c}" if pd.notna(c) else _RAUMTYP_FALLBACK_COLOR
+            for c in df_year["_RaumtypColor"]
+        ]
         ax.bar(df_year["Nutzungsart"], df_year["Differenz_m2"], color=colors)
-        ax.set_xlabel("Nutzungsart")
+        ax.set_xlabel("Raumtyp")
         ax.set_ylabel("Differenz (m²)")
         ax.set_title(str(year))
         ax.axhline(y=0, color="black", linewidth=0.5)
         ax.set_xticks(range(len(list(df_year["Nutzungsart"]))))
         ax.set_xticklabels(list(df_year["Nutzungsart"]), rotation=60, ha="right")
+        ax.yaxis.set_major_formatter(
+            mticker.FuncFormatter(lambda v, _pos: _replace_thousands_commas(f"{v:,.0f}"))
+        )
         ax.grid(True, alpha=0.3, axis="y")
         if ylim is not None:
             ax.set_ylim(ylim)
@@ -1570,7 +1592,7 @@ def main(page: ft.Page) -> None:
                 eigentumsform_pie_column,
                 ft.Divider(),
                 ft.Text(
-                    "Überschuss/Defizit nach Nutzungsart",
+                    "Überschuss/Defizit nach Raumtyp",
                     size=20,
                     weight=ft.FontWeight.BOLD,
                 ),
