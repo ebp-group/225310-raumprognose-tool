@@ -40,10 +40,16 @@ sys.path.insert(0, os.path.dirname(__file__))
 from calculations import (
     area_by_eigentumsform,
     current_area_by_nutzungsart,
+    flaechenpotenzial_total,
     future_demand,
     surplus_deficit,
 )
-from data_loader import load_gebaeude_raeume, load_nutzungsfaktoren, load_studierende
+from data_loader import (
+    load_flaechenpotenzial,
+    load_gebaeude_raeume,
+    load_nutzungsfaktoren,
+    load_studierende,
+)
 
 
 def get_assets_dir() -> Path:
@@ -573,6 +579,70 @@ def _create_eigentumsform_pie_charts(df_gebaeude: pd.DataFrame) -> list[tuple[in
     return figs
 
 
+_FLAECHENPOTENZIAL_YEAR = 2040
+
+
+def _create_flaechenpotenzial_chart(
+    df_gebaeude: pd.DataFrame,
+    df_demand: pd.DataFrame,
+    df_flaechenpotenzial: pd.DataFrame,
+) -> plt.Figure:
+    """Stacked bar chart: current area + potential vs. demand, for the Stichjahr 2040."""
+    year = _FLAECHENPOTENZIAL_YEAR
+
+    df_eigentumsform = area_by_eigentumsform(df_gebaeude, [year])
+    ist_total = float(df_eigentumsform.loc[df_eigentumsform["Jahr"] == year, "Fläche"].sum())
+
+    potenzial_total = flaechenpotenzial_total(df_flaechenpotenzial, year)
+
+    soll_total = float(df_demand.loc[df_demand["Jahr"] == year, "Bedarf_m2"].sum())
+
+    categories = ["Areal", f"SOLL {year}"]
+    flaeche_values = [ist_total, 0.0]
+    potenzial_values = [potenzial_total, 0.0]
+    bedarf_values = [0.0, soll_total]
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    bars_bestand = ax.bar(categories, flaeche_values, label="Bestand (Eigentum und Miete)", color="#7aa2c0")
+    bars_potenzial = ax.bar(
+        categories, potenzial_values, bottom=flaeche_values, label="Potenzial (Eigentum und Miete)", color="#8cb48c"
+    )
+    bars_bedarf = ax.bar(categories, bedarf_values, label="Flächenbedarf SOLL UniSG", color="#dfa02d")
+
+    for bars, values in (
+        (bars_bestand, flaeche_values),
+        (bars_potenzial, potenzial_values),
+        (bars_bedarf, bedarf_values),
+    ):
+        for bar, value in zip(bars, values):
+            if value <= 0:
+                continue
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_y() + bar.get_height() / 2,
+                _replace_thousands_commas(f"{value:,.0f}"),
+                ha="center",
+                va="center",
+            )
+
+    ax.set_ylabel("Flächen (m² GF)", fontweight="bold")
+    ax.yaxis.set_major_formatter(
+        mticker.FuncFormatter(lambda v, _pos: _replace_thousands_commas(f"{v:,.0f}"))
+    )
+    for tick_label in ax.get_xticklabels():
+        tick_label.set_fontweight("bold")
+    legend = ax.legend(
+        title="",
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),
+        ncol=2,
+        frameon=False,
+    )
+    legend.get_title().set_fontweight("bold")
+    ax.grid(True, alpha=0.3, axis="y")
+    return fig
+
+
 # ── Excel export builder ─────────────────────────────────────────────────────
 
 
@@ -971,6 +1041,7 @@ def main(page: ft.Page) -> None:
         "df_gebaeude": None,
         "df_studierende": None,
         "df_faktoren": None,
+        "df_flaechenpotenzial": None,
         "scenario": None,
         "ylimits": None,
         "custom_gebaeude": (
@@ -1003,12 +1074,14 @@ def main(page: ft.Page) -> None:
         state["df_gebaeude"] = None
         state["df_studierende"] = None
         state["df_faktoren"] = None
+        state["df_flaechenpotenzial"] = None
 
         _update_scenario_options()
         rebuild_content()
         page.update()
         try:
             state["df_gebaeude"] = load_gebaeude_raeume(state["custom_gebaeude"])
+            state["df_flaechenpotenzial"] = load_flaechenpotenzial(state["custom_gebaeude"])
             state["df_studierende"] = load_studierende(state["custom_studierende"])
             state["df_faktoren"] = load_nutzungsfaktoren(state["custom_faktoren"])
 
@@ -1194,6 +1267,22 @@ def main(page: ft.Page) -> None:
         for _, fig in figs:
             plt.close(fig)
 
+    async def _save_flaechenpotenzial_png(_e):
+        _, df_demand, _ = get_results()
+        fig = _create_flaechenpotenzial_chart(
+            state["df_gebaeude"], df_demand, state["df_flaechenpotenzial"]
+        )
+        path = await ft.FilePicker().save_file(
+            file_name="flaechenpotenzial.png",
+            allowed_extensions=["png"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.update()
+        plt.close(fig)
+
     async def _save_surplus_deficit_pngs(_e):
         _, _, df_sd = get_results()
         ylimits = state["ylimits"] or _compute_ylimits_across_scenarios(
@@ -1231,6 +1320,13 @@ def main(page: ft.Page) -> None:
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
         eigentumsform_pie_figs = _create_eigentumsform_pie_charts(state["df_gebaeude"])
         sd_figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
+        fig_flaechenpotenzial = (
+            _create_flaechenpotenzial_chart(
+                state["df_gebaeude"], df_demand, state["df_flaechenpotenzial"]
+            )
+            if state["df_flaechenpotenzial"] is not None
+            else None
+        )
 
         path = await ft.FilePicker().save_file(
             file_name=f"diagramme_{state['scenario']}.zip",
@@ -1251,6 +1347,11 @@ def main(page: ft.Page) -> None:
                         (f"ueberschuss_defizit_{year}_{state['scenario']}.png", fig)
                         for year, fig in sd_figs
                     ],
+                    *(
+                        [("flaechenpotenzial.png", fig_flaechenpotenzial)]
+                        if fig_flaechenpotenzial is not None
+                        else []
+                    ),
                 ]
             )
             with open(path, "wb") as f:
@@ -1265,6 +1366,8 @@ def main(page: ft.Page) -> None:
             plt.close(fig)
         for _, fig in sd_figs:
             plt.close(fig)
+        if fig_flaechenpotenzial is not None:
+            plt.close(fig_flaechenpotenzial)
 
     # ── Scenario dropdown ─────────────────────────────────────────────────
 
@@ -1558,6 +1661,30 @@ def main(page: ft.Page) -> None:
         ]
         sd_charts_column = ft.Column(controls=sd_chart_rows, spacing=16)
 
+        fig_flaechenpotenzial = (
+            _create_flaechenpotenzial_chart(
+                state["df_gebaeude"], df_demand, state["df_flaechenpotenzial"]
+            )
+            if state["df_flaechenpotenzial"] is not None
+            else None
+        )
+        flaechenpotenzial_controls: list[ft.Control] = (
+            [
+                ft.Divider(),
+                ft.Text(
+                    "Flächenpotenzial",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                ft.Container(
+                    content=ft.Image(src=_fig_to_base64(fig_flaechenpotenzial)),
+                    alignment=ft.Alignment.CENTER,
+                ),
+            ]
+            if fig_flaechenpotenzial is not None
+            else []
+        )
+
         tab3 = ft.Column(
             controls=[
                 ft.Text(
@@ -1597,6 +1724,7 @@ def main(page: ft.Page) -> None:
                     weight=ft.FontWeight.BOLD,
                 ),
                 sd_charts_column,
+                *flaechenpotenzial_controls,
             ],
             scroll=ft.ScrollMode.AUTO,
             spacing=16,
@@ -1656,6 +1784,17 @@ def main(page: ft.Page) -> None:
                             "📥 Überschuss/Defizit (ZIP)",
                             on_click=_save_surplus_deficit_pngs,
                             icon=ft.Icons.FOLDER_ZIP,
+                        ),
+                        *(
+                            [
+                                ft.Button(
+                                    "📥 Flächenpotenzial (PNG)",
+                                    on_click=_save_flaechenpotenzial_png,
+                                    icon=ft.Icons.IMAGE,
+                                )
+                            ]
+                            if state["df_flaechenpotenzial"] is not None
+                            else []
                         ),
                     ],
                     spacing=16,

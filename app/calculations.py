@@ -322,3 +322,21 @@ def wide_results(df_sd: pd.DataFrame) -> pd.DataFrame:
     # convert back to integers to match the original pandas pivot_table output.
     result.columns = pd.Index([int(c) for c in result.columns], name="Jahr")
     return result
+
+
+def flaechenpotenzial_total(df_flaechenpotenzial: pd.DataFrame, year: int) -> float:
+    """Sum the Flächenpotenzial values for a given evaluation year.
+
+    Args:
+        df_flaechenpotenzial: DataFrame with at least the columns
+            ``Jahr Auswertung`` and ``Flächenpotential``, as returned by
+            :func:`data_loader.load_flaechenpotenzial`.
+        year: Evaluation year (``Jahr Auswertung``) to sum over.
+
+    Returns:
+        Sum of ``Flächenpotential`` for rows matching *year*.
+    """
+    matching = df_flaechenpotenzial.loc[
+        df_flaechenpotenzial["Jahr Auswertung"] == year, "Flächenpotential"
+    ]
+    return float(matching.sum())

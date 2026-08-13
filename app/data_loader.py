@@ -18,6 +18,7 @@ _DATA_DIR = Path(__file__).parent.parent / "data"
 _GEBAEUDE_COLS = {"Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche m²", "Betriebsaufnahme", "Betriebsende"}
 _STUDIERENDE_COLS = {"Jahr", "Anzahl", "Beschreibung", "Kategorie"}
 _NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_person", "schritt", "bezug"}
+_FLAECHENPOTENZIAL_SHEET = "Flaechenpotenzial_UniSG"
 
 
 FileSource = str | Path | IO[bytes]
@@ -69,6 +70,47 @@ def load_gebaeude_raeume(
     df["Fläche"] = pd.to_numeric(df["Fläche"], errors="coerce").astype("float64")
 
     return df[df["Raumtyp EBP"].notna()].filter(["Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche", "Betriebsaufnahme", "Betriebsende"])
+
+
+def load_flaechenpotenzial(source: FileSource) -> pd.DataFrame | None:
+    """Load the optional Flächenpotenzial sheet from the Rauminventar workbook.
+
+    The sheet (named ``Flaechenpotenzial_UniSG``) is optional; buildings-and-rooms
+    workbooks without it simply don't offer the Flächenpotenzial chart. When
+    present, it is expected to hold exactly three columns in order: the
+    evaluation year (``Jahr Auswertung``), the building (``Gebäude``), and the
+    potential area in m² (e.g. ``Flächenpotential HNF 1 / 2 / 3 / 5 m2``) —
+    matched by position rather than exact header text, since that last header
+    may vary.
+
+    Args:
+        source: Path or file-like object pointing at the same workbook passed
+            to :func:`load_gebaeude_raeume`.
+
+    Returns:
+        DataFrame with columns ``Jahr Auswertung``, ``Gebäude``, and
+        ``Flächenpotential``, or ``None`` if the workbook has no sheet named
+        ``Flaechenpotenzial_UniSG``.
+
+    Raises:
+        ValueError: If the sheet exists but has fewer than 3 columns.
+    """
+    excel_file = pd.ExcelFile(source, engine="openpyxl")
+    if _FLAECHENPOTENZIAL_SHEET not in excel_file.sheet_names:
+        return None
+
+    df = pd.read_excel(excel_file, sheet_name=_FLAECHENPOTENZIAL_SHEET, header=0)
+    if df.shape[1] < 3:
+        raise ValueError(
+            f"Sheet '{_FLAECHENPOTENZIAL_SHEET}' in '{os.path.basename(source)}' "
+            "must have at least 3 columns (Jahr Auswertung, Gebäude, Flächenpotential)."
+        )
+
+    df = df.iloc[:, :3].copy()
+    df.columns = ["Jahr Auswertung", "Gebäude", "Flächenpotential"]
+    df["Jahr Auswertung"] = pd.to_numeric(df["Jahr Auswertung"], errors="coerce").astype("Int64")
+    df["Flächenpotential"] = pd.to_numeric(df["Flächenpotential"], errors="coerce").astype("float64")
+    return df
 
 
 def load_studierende(
