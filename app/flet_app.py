@@ -458,6 +458,20 @@ def _create_surplus_deficit_charts(
     return figs
 
 
+_EIGENTUMSFORM_COLORS = {
+    "Eigentum Kanton St.Gallen - langfristige Nutzung": "#8cb48c",
+    "Eigentum Kanton St.Gallen - Miete temporär": "#bad1ba",
+    "Eigentum Dritter - Miete temporär": "#7aa2c0",
+    "Eigentum Stiftungen - Miete temporär": "#aec7d9",
+}
+
+
+def _eigentumsform_color(eigentumsform: str, fallback_idx: int) -> Any:
+    if eigentumsform in _EIGENTUMSFORM_COLORS:
+        return _EIGENTUMSFORM_COLORS[eigentumsform]
+    return plt.get_cmap("tab20")(fallback_idx % 20)
+
+
 def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     """Stacked bar chart of area by ownership type (Eigentumsform) over selected years."""
     years = [2025, 2026, 2030, 2040]
@@ -474,7 +488,6 @@ def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     pivot = pivot.reindex(columns=years, fill_value=0)
 
     eigentumsformen = pivot.index.tolist()
-    palette = plt.get_cmap("tab20")
     x = range(len(years))
 
     fig, ax = plt.subplots(figsize=(9, 5))
@@ -486,7 +499,7 @@ def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
             values,
             bottom=bottom,
             label=str(eigentumsform),
-            color=palette(idx % palette.N),
+            color=_eigentumsform_color(eigentumsform, idx),
         )
         bottom = [b + v for b, v in zip(bottom, values)]
 
@@ -500,6 +513,41 @@ def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     ax.grid(True, alpha=0.3, axis="y")
     fig.tight_layout()
     return fig
+
+
+def _create_eigentumsform_pie_charts(df_gebaeude: pd.DataFrame) -> list[tuple[int, plt.Figure]]:
+    """One pie chart per Stichjahr showing the share of area by ownership type."""
+    years = [2025, 2026, 2030, 2040]
+    df = area_by_eigentumsform(df_gebaeude, years)
+
+    pivot = df.pivot_table(
+        index="Eigentumsform",
+        columns="Jahr",
+        values="Fläche",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    pivot = pivot.reindex(columns=years, fill_value=0)
+
+    eigentumsformen = pivot.index.tolist()
+    colors = {e: _eigentumsform_color(e, idx) for idx, e in enumerate(eigentumsformen)}
+
+    figs: list[tuple[int, plt.Figure]] = []
+    for year in years:
+        values = pivot[year]
+        values = values[values > 0]
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.pie(
+            values,
+            labels=values.index.tolist(),
+            colors=[colors[e] for e in values.index],
+            autopct="%1.1f%%",
+            startangle=90,
+        )
+        ax.set_title(f"Fläche nach Eigentumsform {year}")
+        fig.tight_layout()
+        figs.append((year, fig))
+    return figs
 
 
 # ── Excel export builder ─────────────────────────────────────────────────────
@@ -1103,6 +1151,26 @@ def main(page: ft.Page) -> None:
             page.update()
         plt.close(fig)
 
+    async def _save_eigentumsform_pie_pngs(_e):
+        figs = _create_eigentumsform_pie_charts(state["df_gebaeude"])
+
+        path = await ft.FilePicker().save_file(
+            file_name="eigentumsform_kuchen.zip",
+            allowed_extensions=["zip"],
+            file_type=ft.FilePickerFileType.CUSTOM,
+        )
+        if path:
+            zip_bytes = _build_png_zip(
+                [(f"eigentumsform_{year}.png", fig) for year, fig in figs]
+            )
+            with open(path, "wb") as f:
+                f.write(zip_bytes)
+            page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
+            page.update()
+
+        for _, fig in figs:
+            plt.close(fig)
+
     async def _save_surplus_deficit_pngs(_e):
         _, _, df_sd = get_results()
         ylimits = state["ylimits"] or _compute_ylimits_across_scenarios(
@@ -1138,6 +1206,7 @@ def main(page: ft.Page) -> None:
         fig_students = _create_students_chart(state["df_studierende"])
         fig_demand = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
+        eigentumsform_pie_figs = _create_eigentumsform_pie_charts(state["df_gebaeude"])
         sd_figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
 
         path = await ft.FilePicker().save_file(
@@ -1152,6 +1221,10 @@ def main(page: ft.Page) -> None:
                     (f"flaechenbedarf_{state['scenario']}.png", fig_demand),
                     ("eigentumsform.png", fig_eigentumsform),
                     *[
+                        (f"eigentumsform_{year}.png", fig)
+                        for year, fig in eigentumsform_pie_figs
+                    ],
+                    *[
                         (f"ueberschuss_defizit_{year}_{state['scenario']}.png", fig)
                         for year, fig in sd_figs
                     ],
@@ -1165,6 +1238,8 @@ def main(page: ft.Page) -> None:
         plt.close(fig_students)
         plt.close(fig_demand)
         plt.close(fig_eigentumsform)
+        for _, fig in eigentumsform_pie_figs:
+            plt.close(fig)
         for _, fig in sd_figs:
             plt.close(fig)
 
@@ -1423,7 +1498,24 @@ def main(page: ft.Page) -> None:
         fig_students = _create_students_chart(state["df_studierende"])
         fig_demand = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
+        eigentumsform_pie_figs = _create_eigentumsform_pie_charts(state["df_gebaeude"])
         sd_figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
+
+        eigentumsform_pie_controls: list[ft.Control] = [
+            ft.Container(
+                content=ft.Image(src=_fig_to_base64(fig)),
+                expand=True,
+            )
+            for _, fig in eigentumsform_pie_figs
+        ]
+        eigentumsform_pie_rows: list[ft.Control] = [
+            ft.Row(
+                controls=eigentumsform_pie_controls[i : i + 2],
+                spacing=16,
+            )
+            for i in range(0, len(eigentumsform_pie_controls), 2)
+        ]
+        eigentumsform_pie_column = ft.Column(controls=eigentumsform_pie_rows, spacing=16)
 
         sd_chart_controls: list[ft.Control] = [
             ft.Container(
@@ -1474,6 +1566,7 @@ def main(page: ft.Page) -> None:
                     content=ft.Image(src=_fig_to_base64(fig_eigentumsform)),
                     alignment=ft.Alignment.CENTER,
                 ),
+                eigentumsform_pie_column,
                 ft.Divider(),
                 ft.Text(
                     "Überschuss/Defizit nach Nutzungsart",
@@ -1528,6 +1621,11 @@ def main(page: ft.Page) -> None:
                             "📥 Eigentumsform (PNG)",
                             on_click=_save_eigentumsform_png,
                             icon=ft.Icons.IMAGE,
+                        ),
+                        ft.Button(
+                            "📥 Eigentumsform Kuchendiagramme (ZIP)",
+                            on_click=_save_eigentumsform_pie_pngs,
+                            icon=ft.Icons.FOLDER_ZIP,
                         ),
                         ft.Button(
                             "📥 Überschuss/Defizit (ZIP)",
