@@ -24,7 +24,6 @@ import logging
 import flet as ft
 import flet_datatable2 as fdt
 import matplotlib
-import yaml
 
 matplotlib.use("Agg")  # noqa: E402 – must be set before importing pyplot
 import matplotlib.pyplot as plt  # noqa: E402
@@ -45,17 +44,25 @@ from calculations import (
     future_demand,
     surplus_deficit,
 )
+from config import (
+    default_input_paths,
+    eigenmiete_rule,
+    eigentumsform_color_map,
+    eigentumsform_rename_map,
+    get_assets_dir,
+    get_config,
+    nutzungsart_color_map,
+    nutzungsart_display_map,
+    nutzungsart_group_members,
+    nutzungsart_key_order,
+    stichjahre,
+)
 from data_loader import (
     load_flaechenpotenzial,
     load_gebaeude_raeume,
     load_nutzungsfaktoren,
     load_studierende,
 )
-
-
-def get_assets_dir() -> Path:
-    default_assets_dir = Path(__file__).parent / "assets"  # fallback for local runs
-    return Path(os.environ.get("FLET_ASSETS_DIR", str(default_assets_dir))).resolve()
 
 
 def _resolve_app_version() -> str:
@@ -78,10 +85,19 @@ def _resolve_app_version() -> str:
 
 APP_VERSION = _resolve_app_version()
 
-APP_NAME = "Raumprognose Tool"
-APP_COPYRIGHT_YEAR = "2026"
-APP_COPYRIGHT = f"© {APP_COPYRIGHT_YEAR} EBP"
-APP_LICENSE_NAME = "BSD 3-Clause License"
+_CONFIG = get_config()
+_APP_CFG = _CONFIG.get("app") or {}
+_AREAL_CFG = _CONFIG.get("areal") or {}
+_CHART_CFG = _CONFIG.get("charts") or {}
+_EXCEL_CFG = _CONFIG.get("excel") or {}
+
+APP_NAME = _APP_CFG.get("name", "Raumprognose Tool")
+APP_TITLE_EMOJI = _APP_CFG.get("title_emoji", "")
+APP_TITLE = f"{APP_TITLE_EMOJI} {APP_NAME}".strip()
+APP_ORGANIZATION = _APP_CFG.get("organization", "")
+APP_COPYRIGHT_YEAR = str(_APP_CFG.get("copyright_year", ""))
+APP_COPYRIGHT = f"© {APP_COPYRIGHT_YEAR} {APP_ORGANIZATION}".strip()
+APP_LICENSE_NAME = _APP_CFG.get("license_name", "BSD 3-Clause License")
 APP_LICENSE_TEXT = (
     "Redistribution and use in source and binary forms, with or without "
     "modification, are permitted provided that the following conditions are met:\n\n"
@@ -96,7 +112,23 @@ APP_LICENSE_TEXT = (
     'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" '
     "AND WITHOUT WARRANTY OF ANY KIND."
 )
-APP_DOCUMENTATION_URL = "https://ebp-group.github.io/225310-raumprognose-tool/"
+APP_DOCUMENTATION_URL = _APP_CFG.get("documentation_url", "")
+APP_WINDOW_WIDTH = (_APP_CFG.get("window") or {}).get("width", 1400)
+APP_WINDOW_HEIGHT = (_APP_CFG.get("window") or {}).get("height", 900)
+
+# Name of the areal/campus, substituted into configurable chart labels.
+AREAL_NAME = _AREAL_CFG.get("name", "")
+AREAL_LABEL = _AREAL_CFG.get("label", "Areal")
+
+# Stichjahre per use case (see the ``years:`` section of config.yml).
+YEARS_PROGNOSE = list(stichjahre("prognose", _CONFIG))
+YEARS_BESTAND = list(stichjahre("bestand", _CONFIG))
+YEARS_EXCEL_VISIBLE = {int(y) for y in stichjahre("excel_visible", _CONFIG)}
+
+CHART_DPI = _CHART_CFG.get("dpi", 150)
+CHART_AXIS_MARGIN = _CHART_CFG.get("axis_margin", 0.05)
+_STUDENTS_CHART_CFG = _CHART_CFG.get("students") or {}
+_FLAECHENPOTENZIAL_CHART_CFG = _CHART_CFG.get("flaechenpotenzial") or {}
 
 SPLASH_DURATION_SECONDS = 2
 SPLASH_FADE_OUT_MS = 300
@@ -108,71 +140,24 @@ logging.basicConfig(
 log.setLevel(logging.DEBUG)
 
 
-def _load_nutzungsart_config() -> tuple[dict[str, str], dict[str, str]]:
-    """Load display labels and colors from config.yml as (display_map, color_map)."""
-    config_path = get_assets_dir() / "config.yml"
-    try:
-        with config_path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        log.warning("Nutzungsart config not found: %s", config_path)
-        return {}, {}
-    except PermissionError as exc:
-        log.warning(
-            "Permission denied while reading Nutzungsart config %s: %s",
-            config_path,
-            exc,
-        )
-        return {}, {}
-    except yaml.YAMLError as exc:
-        log.warning("Invalid YAML in Nutzungsart config %s: %s", config_path, exc)
-        return {}, {}
-    except OSError as exc:
-        log.warning(
-            "OS error while reading Nutzungsart config %s: %s", config_path, exc
-        )
-        return {}, {}
+NUTZUNGSART_DISPLAY_MAP = nutzungsart_display_map(_CONFIG)
+NUTZUNGSART_COLOR_MAP = nutzungsart_color_map(_CONFIG)
+NUTZUNGSART_KEY_ORDER = nutzungsart_key_order(_CONFIG)
 
-    display_map: dict[str, str] = {}
-    color_map: dict[str, str] = {}
-    order_map: dict[int, str] = {}
-    for entry in data.get("nutzungsarten", []):
-        raw_name = entry.get("column_name")
-        display_name = entry.get("name")
-        color = entry.get("color")
-        sort_order = entry.get("sort_order")
-        if not raw_name:
-            continue
-        if display_name:
-            display_map[str(raw_name)] = str(display_name)
-        if color:
-            normalized_color = str(color).lstrip("#").upper()
-            if re.fullmatch(r"[0-9A-F]{6}", normalized_color):
-                color_map[str(raw_name)] = normalized_color
-            else:
-                log.warning(
-                    "Invalid color '%s' for Nutzungsart '%s' in %s",
-                    color,
-                    raw_name,
-                    config_path,
-                )
-        if sort_order:
-            try:
-                order_map[int(sort_order)] = str(raw_name)
-            except ValueError:
-                log.warning(
-                    "Invalid sort_order '%s' for Nutzungsart '%s' in %s",
-                    sort_order,
-                    raw_name,
-                    config_path,
-                )
-    key_order = [name for _, name in sorted(order_map.items())]
-    return display_map, color_map, key_order
+# Which Nutzungsarten form the "Büro" block of the rounded Excel export; every
+# other configured Nutzungsart counts towards "Lehre".
+NUTZUNGSART_BUERO = nutzungsart_group_members("buero", _CONFIG)
 
+EIGENTUMSFORM_RENAME_MAP = eigentumsform_rename_map(_CONFIG)
+EIGENTUMSFORM_EIGENMIETE_RULE = eigenmiete_rule(_CONFIG)
 
-NUTZUNGSART_DISPLAY_MAP, NUTZUNGSART_COLOR_MAP, NUTZUNGSART_KEY_ORDER = (
-    _load_nutzungsart_config()
-)
+_KATEGORIEN_CFG = _CONFIG.get("kategorien") or {}
+# This Kategorie counts as students, every other one as staff.
+KATEGORIE_STUDIERENDE = _KATEGORIEN_CFG.get("studierende", "Studierende")
+KATEGORIE_LABELS = dict(_KATEGORIEN_CFG.get("labels") or {})
+
+DEFAULT_SZENARIO = (_CONFIG.get("szenarien") or {}).get("default", "Basis")
+
 
 # ── UI helper functions ───────────────────────────────────────────────────────
 
@@ -285,7 +270,7 @@ def _metric_card(label: str, value: Any, is_surplus: bool) -> ft.Card:
 def _fig_to_base64(fig: plt.Figure) -> str:
     """Render a matplotlib figure to a base64-encoded PNG string."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=CHART_DPI, bbox_inches="tight")
     buf.seek(0)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
@@ -296,7 +281,7 @@ def _build_png_zip(figs: list[tuple[str, plt.Figure]]) -> bytes:
     with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for filename, fig in figs:
             png_buf = io.BytesIO()
-            fig.savefig(png_buf, format="png", dpi=150, bbox_inches="tight")
+            fig.savefig(png_buf, format="png", dpi=CHART_DPI, bbox_inches="tight")
             archive.writestr(filename, png_buf.getvalue())
     return zip_buf.getvalue()
 
@@ -349,12 +334,12 @@ def _compute_ylimits_across_scenarios(
                 sd_min = min(sd_min, vals.min())
                 sd_max = max(sd_max, vals.max())
 
-    # Add 5% margin for visual clarity
+    # Add a margin for visual clarity
     def _add_margin(vmin: float, vmax: float) -> tuple[float, float]:
         if vmin == float("inf") or vmax == float("-inf"):
             return (0, 1)
         span = vmax - vmin
-        margin = span * 0.05 if span > 0 else 1
+        margin = span * CHART_AXIS_MARGIN if span > 0 else 1
         return (vmin - margin, vmax + margin)
 
     return {
@@ -386,8 +371,8 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
         .sort_values("Jahr")
     )
 
-    categories = ["Studierende", "Forschung", "Services", "Stundenlohn"]
-    palette = plt.get_cmap("tab10")
+    categories = list(_STUDENTS_CHART_CFG.get("categories") or [])
+    palette = plt.get_cmap(_STUDENTS_CHART_CFG.get("colormap", "tab10"))
 
     for idx, label in enumerate(categories):
         if label not in chart_df.columns:
@@ -402,9 +387,12 @@ def _create_students_chart(df_studierende: pd.DataFrame) -> plt.Figure:
 
     ax.set_xlabel("Jahr")
     ax.set_ylabel("Anzahl")
-    ax.set_title("Entwicklung nach Kategorie")
-    # TODO: this is hardcoded to be consistent between the two prognoses, the maximum should be computed dynamically
-    ax.set_ylim(top=12000) 
+    ax.set_title(_STUDENTS_CHART_CFG.get("title", "Entwicklung nach Kategorie"))
+    # A fixed cap keeps two prognoses visually comparable; null in config.yml
+    # falls back to matplotlib's automatic scaling.
+    ylim_top = _STUDENTS_CHART_CFG.get("ylim_top")
+    if ylim_top is not None:
+        ax.set_ylim(top=ylim_top)
     if ax.lines:
         ax.legend()
     ax.grid(True, alpha=0.3)
@@ -418,8 +406,7 @@ def _create_demand_chart(
     """Grouped bar chart of area demand by usage type and year."""
     fig, ax = plt.subplots(figsize=(10, 5))
     df_demand = _apply_nutzungsart_labels(df_demand)
-    # years = sorted(df_demand["jahr"].unique())
-    years = [2026, 2030, 2040, 2050]
+    years = YEARS_PROGNOSE
 
     nutzungsarten = sorted(
         df_demand[df_demand["Bedarf_m2"] > 0]["Nutzungsart"].unique()
@@ -449,7 +436,7 @@ def _create_demand_chart(
     return fig
 
 
-_RAUMTYP_FALLBACK_COLOR = "#7f7f7f"
+_RAUMTYP_FALLBACK_COLOR = _CHART_CFG.get("fallback_color", "#7f7f7f")
 
 
 def _create_surplus_deficit_charts(
@@ -460,14 +447,14 @@ def _create_surplus_deficit_charts(
     df_sd["_RaumtypColor"] = _nutzungsart_color_series(df_sd).to_numpy()
     df_sd = _apply_nutzungsart_labels(df_sd)
 
-    years = [2026, 2030, 2040, 2050]
+    years = YEARS_PROGNOSE
 
     if ylim is None:
         vals = df_sd["Differenz_m2"].dropna()
         if len(vals) > 0:
             vmin, vmax = float(vals.min()), float(vals.max())
             span = vmax - vmin
-            margin = span * 0.05 if span > 0 else 1
+            margin = span * CHART_AXIS_MARGIN if span > 0 else 1
             ylim = (min(vmin - margin, 0), vmax + margin)
 
     figs: list[tuple[int, plt.Figure]] = []
@@ -487,34 +474,43 @@ def _create_surplus_deficit_charts(
         ax.set_xticks(range(len(list(df_year["Nutzungsart"]))))
         ax.set_xticklabels(list(df_year["Nutzungsart"]), rotation=60, ha="right")
         ax.yaxis.set_major_formatter(
-            mticker.FuncFormatter(lambda v, _pos: _replace_thousands_commas(f"{v:,.0f}"))
+            mticker.FuncFormatter(
+                lambda v, _pos: _replace_thousands_commas(f"{v:,.0f}")
+            )
         )
         ax.grid(True, alpha=0.3, axis="y")
         if ylim is not None:
             ax.set_ylim(ylim)
-        #fig.tight_layout()
+        # fig.tight_layout()
         figs.append((year, fig))
     return figs
 
 
-_EIGENTUMSFORM_COLORS = {
-    "Eigentum Kanton St.Gallen - langfristige Nutzung": "#8cb48c",
-    "Eigentum Kanton St.Gallen - Miete temporär": "#bad1ba",
-    "Eigentum Dritter - Miete temporär": "#7aa2c0",
-    "Eigentum Stiftungen - Miete temporär": "#aec7d9",
-}
+_EIGENTUMSFORM_COLORS = eigentumsform_color_map(_CONFIG)
+_EIGENTUMSFORM_FALLBACK_COLORMAP = _CHART_CFG.get("fallback_colormap", "tab20")
+
+
+def _area_by_eigentumsform(df_gebaeude: pd.DataFrame, years: list[int]) -> pd.DataFrame:
+    """:func:`calculations.area_by_eigentumsform` with the configured site rules."""
+    return area_by_eigentumsform(
+        df_gebaeude,
+        years,
+        eigenmiete_rule=EIGENTUMSFORM_EIGENMIETE_RULE,
+        rename_map=EIGENTUMSFORM_RENAME_MAP,
+    )
 
 
 def _eigentumsform_color(eigentumsform: str, fallback_idx: int) -> Any:
     if eigentumsform in _EIGENTUMSFORM_COLORS:
         return _EIGENTUMSFORM_COLORS[eigentumsform]
-    return plt.get_cmap("tab20")(fallback_idx % 20)
+    cmap = plt.get_cmap(_EIGENTUMSFORM_FALLBACK_COLORMAP)
+    return cmap(fallback_idx % cmap.N)
 
 
 def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     """Stacked bar chart of area by ownership type (Eigentumsform) over selected years."""
-    years = [2025, 2026, 2030, 2040]
-    df = area_by_eigentumsform(df_gebaeude, years)
+    years = YEARS_BESTAND
+    df = _area_by_eigentumsform(df_gebaeude, years)
 
     # Pivot: index = Eigentumsform, columns = Jahr
     pivot = df.pivot_table(
@@ -554,10 +550,12 @@ def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     return fig
 
 
-def _create_eigentumsform_pie_charts(df_gebaeude: pd.DataFrame) -> list[tuple[int, plt.Figure]]:
+def _create_eigentumsform_pie_charts(
+    df_gebaeude: pd.DataFrame,
+) -> list[tuple[int, plt.Figure]]:
     """One pie chart per Stichjahr showing the share of area by ownership type."""
-    years = [2025, 2026, 2030, 2040]
-    df = area_by_eigentumsform(df_gebaeude, years)
+    years = YEARS_BESTAND
+    df = _area_by_eigentumsform(df_gebaeude, years)
 
     pivot = df.pivot_table(
         index="Eigentumsform",
@@ -589,7 +587,7 @@ def _create_eigentumsform_pie_charts(df_gebaeude: pd.DataFrame) -> list[tuple[in
     return figs
 
 
-_FLAECHENPOTENZIAL_YEAR = 2040
+_FLAECHENPOTENZIAL_YEAR = stichjahre("flaechenpotenzial", _CONFIG)
 
 
 def _create_flaechenpotenzial_chart(
@@ -597,27 +595,46 @@ def _create_flaechenpotenzial_chart(
     df_demand: pd.DataFrame,
     df_flaechenpotenzial: pd.DataFrame,
 ) -> plt.Figure:
-    """Stacked bar chart: current area + potential vs. demand, for the Stichjahr 2040."""
+    """Stacked bar chart: current area + potential vs. demand, for one Stichjahr."""
     year = _FLAECHENPOTENZIAL_YEAR
 
-    df_eigentumsform = area_by_eigentumsform(df_gebaeude, [year])
-    ist_total = float(df_eigentumsform.loc[df_eigentumsform["Jahr"] == year, "Fläche"].sum())
+    df_eigentumsform = _area_by_eigentumsform(df_gebaeude, [year])
+    ist_total = float(
+        df_eigentumsform.loc[df_eigentumsform["Jahr"] == year, "Fläche"].sum()
+    )
 
     potenzial_total = flaechenpotenzial_total(df_flaechenpotenzial, year)
 
     soll_total = float(df_demand.loc[df_demand["Jahr"] == year, "Bedarf_m2"].sum())
 
-    categories = ["Areal", f"SOLL {year}"]
+    categories = [AREAL_LABEL, f"SOLL {year}"]
     flaeche_values = [ist_total, 0.0]
     potenzial_values = [potenzial_total, 0.0]
     bedarf_values = [0.0, soll_total]
 
     fig, ax = plt.subplots(figsize=(6, 5))
-    bars_bestand = ax.bar(categories, flaeche_values, label="Bestand (Eigentum und Miete)", color="#7aa2c0")
-    bars_potenzial = ax.bar(
-        categories, potenzial_values, bottom=flaeche_values, label="Potenzial (Eigentum und Miete)", color="#8cb48c"
+    cfg = _FLAECHENPOTENZIAL_CHART_CFG
+    bars_bestand = ax.bar(
+        categories,
+        flaeche_values,
+        label=cfg.get("bestand_label", "Bestand"),
+        color=cfg.get("bestand_color", "#7aa2c0"),
     )
-    bars_bedarf = ax.bar(categories, bedarf_values, label="Flächenbedarf SOLL UniSG", color="#dfa02d")
+    bars_potenzial = ax.bar(
+        categories,
+        potenzial_values,
+        bottom=flaeche_values,
+        label=cfg.get("potenzial_label", "Potenzial"),
+        color=cfg.get("potenzial_color", "#8cb48c"),
+    )
+    bars_bedarf = ax.bar(
+        categories,
+        bedarf_values,
+        label=cfg.get("bedarf_label", "Flächenbedarf SOLL {areal}").format(
+            areal=AREAL_NAME
+        ),
+        color=cfg.get("bedarf_color", "#dfa02d"),
+    )
 
     for bars, values in (
         (bars_bestand, flaeche_values),
@@ -635,7 +652,7 @@ def _create_flaechenpotenzial_chart(
                 va="center",
             )
 
-    ax.set_ylabel("Flächen (m² GF)", fontweight="bold")
+    ax.set_ylabel(cfg.get("ylabel", "Flächen (m² GF)"), fontweight="bold")
     ax.yaxis.set_major_formatter(
         mticker.FuncFormatter(lambda v, _pos: _replace_thousands_commas(f"{v:,.0f}"))
     )
@@ -655,12 +672,16 @@ def _create_flaechenpotenzial_chart(
 
 # ── Excel export builder ─────────────────────────────────────────────────────
 
-_M2_NUMBER_FORMAT = '#,##0" m²"'
-_HEADCOUNT_NUMBER_FORMAT = "#,##0"
-_POSITIVE_DIFF_FONT = Font(bold=True, color="006100")
-_NEGATIVE_DIFF_FONT = Font(bold=True, color="9C0006")
-_NUMBER_COLUMN_WIDTH = 14
-_VISIBLE_YEARS = {2025, 2030, 2040, 2050}
+_M2_NUMBER_FORMAT = _EXCEL_CFG.get("m2_number_format", '#,##0" m²"')
+_HEADCOUNT_NUMBER_FORMAT = _EXCEL_CFG.get("headcount_number_format", "#,##0")
+_POSITIVE_DIFF_FONT = Font(bold=True, color=_EXCEL_CFG.get("positive_color", "006100"))
+_NEGATIVE_DIFF_FONT = Font(bold=True, color=_EXCEL_CFG.get("negative_color", "9C0006"))
+_NUMBER_COLUMN_WIDTH = _EXCEL_CFG.get("number_column_width", 14)
+_VISIBLE_YEARS = YEARS_EXCEL_VISIBLE
+_EXCEL_SHEET_NAMES = _EXCEL_CFG.get("sheet_names") or {}
+_EXCEL_ROW_LABELS = _EXCEL_CFG.get("row_labels") or {}
+_EXCEL_EXPORT_PREFIX = _EXCEL_CFG.get("export_prefix", "raumprognose")
+_EXCEL_ROUNDING_STEP = _EXCEL_CFG.get("rounding_step", 5)
 
 
 def _build_excel(
@@ -680,8 +701,8 @@ def _build_excel(
     """
     wb = Workbook()
 
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill("solid", fgColor="1F4E79")
+    header_font = Font(bold=True, color=_EXCEL_CFG.get("header_font_color", "FFFFFF"))
+    header_fill = PatternFill("solid", fgColor=_EXCEL_CFG.get("header_fill", "1F4E79"))
     center = Alignment(horizontal="center")
 
     def _write_sheet(
@@ -741,7 +762,9 @@ def _build_excel(
 
         for col_idx, col in enumerate(col_names, start=1):
             if pd.api.types.is_numeric_dtype(df[col]):
-                ws.column_dimensions[get_column_letter(col_idx)].width = _NUMBER_COLUMN_WIDTH
+                ws.column_dimensions[get_column_letter(col_idx)].width = (
+                    _NUMBER_COLUMN_WIDTH
+                )
 
     df_results_export = df_results.copy()
     df_results_nutzungsart_colors = _nutzungsart_color_series(df_results_export)
@@ -755,20 +778,20 @@ def _build_excel(
     _write_sheet(
         ws1,
         df_results_export,
-        "Ergebnisse",
+        _EXCEL_SHEET_NAMES.get("ergebnisse", "Ergebnisse"),
         diff_col="Differenz_m2",
         nutzungsart_colors=df_results_nutzungsart_colors,
         area_cols=["Fläche", "Bedarf_m2", "Differenz_m2"],
     )
 
     ws2 = wb.create_sheet()
-    _write_sheet(ws2, df_stud, "Studierende")
+    _write_sheet(ws2, df_stud, _EXCEL_SHEET_NAMES.get("studierende", "Studierende"))
 
     ws3 = wb.create_sheet()
     _write_sheet(
         ws3,
         df_dem_export,
-        "Flächenbedarf",
+        _EXCEL_SHEET_NAMES.get("flaechenbedarf", "Flächenbedarf"),
         nutzungsart_colors=df_dem_nutzungsart_colors,
         area_cols=["Bedarf_m2"],
     )
@@ -779,7 +802,7 @@ def _build_excel(
 
 
 def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> bytes:
-    """Build a wide-format Excel workbook with areas rounded to the nearest 5.
+    """Build a wide-format Excel workbook with areas rounded to a configurable step.
 
     The sheet has one row per usage type (``Nutzungsart``) and three columns
     per forecast year: *IST* (available area), *SOLL* (required area) and
@@ -801,21 +824,23 @@ def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> b
             ``Jahr``, ``Fläche``, ``Bedarf_m2``, ``Differenz_m2``.
         df_studierende: Student/staff numbers DataFrame in long format with
             columns ``Jahr``, ``Kategorie``, ``Anzahl``. Rows with
-            ``Kategorie == "Studierende"`` are counted as students; every
-            other Kategorie is counted as staff ("Mitarbeitende").
+            the Kategorie configured as ``kategorien.studierende`` are counted
+            as students; every other Kategorie is counted as staff.
 
     Returns:
         Raw bytes of the ``.xlsx`` workbook.
     """
 
-    def _round5(x: float) -> int:
-        """Round *x* to the nearest multiple of 5."""
-        return int(round(x / 5) * 5)
+    step = _EXCEL_ROUNDING_STEP
+
+    def _round_to_step(x: float) -> int:
+        """Round *x* to the nearest multiple of the configured step."""
+        return int(round(x / step) * step)
 
     # Round numeric columns
     df = df_sd.copy()
     for col in ("Fläche", "Bedarf_m2", "Differenz_m2"):
-        df[col] = df[col].apply(lambda v: _round5(v) if pd.notna(v) else None)
+        df[col] = df[col].apply(lambda v: _round_to_step(v) if pd.notna(v) else None)
 
     years = sorted(df["Jahr"].unique())
 
@@ -825,7 +850,7 @@ def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> b
         if NUTZUNGSART_KEY_ORDER
         else sorted(df["Nutzungsart"].unique())
     )
-    buero_types = [nt for nt in usage_types if nt == "Büro"]
+    buero_types = [nt for nt in usage_types if nt in NUTZUNGSART_BUERO]
     lehre_types = [nt for nt in usage_types if nt not in buero_types]
 
     col_tuples = [(yr, label) for yr in years for label in ("IST", "SOLL", "Differenz")]
@@ -848,12 +873,12 @@ def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> b
     )
 
     students_by_year = (
-        df_studierende[df_studierende["Kategorie"] == "Studierende"]
+        df_studierende[df_studierende["Kategorie"] == KATEGORIE_STUDIERENDE]
         .groupby("Jahr")["Anzahl"]
         .sum()
     )
     staff_by_year = (
-        df_studierende[df_studierende["Kategorie"] != "Studierende"]
+        df_studierende[df_studierende["Kategorie"] != KATEGORIE_STUDIERENDE]
         .groupby("Jahr")["Anzahl"]
         .sum()
     )
@@ -865,16 +890,18 @@ def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> b
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "Gerundete Flächen"
+    ws.title = _EXCEL_SHEET_NAMES.get("gerundet", "Gerundete Flächen")
 
     header_font = Font(bold=True, color="000000")
     header_fill = PatternFill("solid", fgColor="FFFFFF")
-    subheader_fill = PatternFill("solid", fgColor="D9D9D9")
+    subheader_fill = PatternFill(
+        "solid", fgColor=_EXCEL_CFG.get("subheader_fill", "D9D9D9")
+    )
     center = Alignment(horizontal="center")
     left = Alignment(horizontal="left")
 
     # Row 1: "Raumtypen" header + year group headers (merged over 3 cols each)
-    ws.cell(row=1, column=1, value="Raumtypen")
+    ws.cell(row=1, column=1, value=_EXCEL_ROW_LABELS.get("raumtypen", "Raumtypen"))
     ws.cell(row=1, column=1).font = header_font
     ws.cell(row=1, column=1).fill = header_fill
     ws.cell(row=1, column=1).alignment = center
@@ -918,7 +945,9 @@ def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> b
                 if metric == "Differenz" and val is not None:
                     try:
                         cell.font = (
-                            _POSITIVE_DIFF_FONT if float(val) >= 0 else _NEGATIVE_DIFF_FONT
+                            _POSITIVE_DIFF_FONT
+                            if float(val) >= 0
+                            else _NEGATIVE_DIFF_FONT
                         )
                     except (TypeError, ValueError):
                         pass
@@ -945,7 +974,9 @@ def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> b
                     if metric == "Differenz":
                         try:
                             cell.font = (
-                                _POSITIVE_DIFF_FONT if float(val) >= 0 else _NEGATIVE_DIFF_FONT
+                                _POSITIVE_DIFF_FONT
+                                if float(val) >= 0
+                                else _NEGATIVE_DIFF_FONT
                             )
                         except (TypeError, ValueError):
                             pass
@@ -967,18 +998,53 @@ def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> b
 
     row_specs: list[tuple] = (
         [("data", nt) for nt in lehre_types]
-        + [("total", "Total Lehre HNF 1 / 3 / 5", lambda yr, m: _partial_total(lehre_types, yr, m))]
-        + [("headcount", "Anzahl Studierende", students_by_year)]
+        + [
+            (
+                "total",
+                _EXCEL_ROW_LABELS.get("total_lehre", "Total Lehre"),
+                lambda yr, m: _partial_total(lehre_types, yr, m),
+            )
+        ]
+        + [
+            (
+                "headcount",
+                _EXCEL_ROW_LABELS.get("anzahl_studierende", "Anzahl Studierende"),
+                students_by_year,
+            )
+        ]
         + [("blank",)]
         + [("data", nt) for nt in buero_types]
         + (
-            [("total", "Total Büro HNF 2", lambda yr, m: _partial_total(buero_types, yr, m))]
+            [
+                (
+                    "total",
+                    _EXCEL_ROW_LABELS.get("total_buero", "Total Büro"),
+                    lambda yr, m: _partial_total(buero_types, yr, m),
+                )
+            ]
             if buero_types
             else []
         )
-        + [("headcount", "Anzahl Mitarbeitende", staff_by_year)]
+        + [
+            (
+                "headcount",
+                _EXCEL_ROW_LABELS.get("anzahl_mitarbeitende", "Anzahl Mitarbeitende"),
+                staff_by_year,
+            )
+        ]
         + [("blank",), ("blank",)]
-        + [("total", "Total Lehre und Büro HNF 1 / 2 / 3 / 5", lambda yr, m: totals.loc[yr, {"IST": "Fläche", "SOLL": "Bedarf_m2", "Differenz": "Differenz_m2"}[m]])]
+        + [
+            (
+                "total",
+                _EXCEL_ROW_LABELS.get("total_gesamt", "Total"),
+                lambda yr, m: totals.loc[
+                    yr,
+                    {"IST": "Fläche", "SOLL": "Bedarf_m2", "Differenz": "Differenz_m2"}[
+                        m
+                    ],
+                ],
+            )
+        ]
     )
 
     for r_idx, spec in enumerate(row_specs, start=3):
@@ -1077,9 +1143,9 @@ def _show_about_dialog(page: ft.Page) -> None:
 def main(page: ft.Page) -> None:
     """Build and display the Raumprognose desktop application."""
 
-    page.title = "🏛️ Raumprognose Tool"
-    page.window.width = 1400
-    page.window.height = 900
+    page.title = APP_TITLE
+    page.window.width = APP_WINDOW_WIDTH
+    page.window.height = APP_WINDOW_HEIGHT
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
 
@@ -1091,7 +1157,7 @@ def main(page: ft.Page) -> None:
         )
 
     page.appbar = ft.AppBar(
-        title=ft.Text("🏛️ Raumprognose Tool"),
+        title=ft.Text(APP_TITLE),
         bgcolor=ft.Colors.SURFACE,
         actions=[
             ft.MenuBar(
@@ -1146,10 +1212,9 @@ def main(page: ft.Page) -> None:
 
     # ── Mutable application state ─────────────────────────────────────────
 
-    # TODO: remove hardcoded paths and use file pickers instead
-    base_path = Path(
-        r"C:\Users\ods\OneDrive - EBP\CH_P_225310 - PE_TPF_UniSG - General\40_BEARBEITUNG\04_Auswertung\02_Datenmodell"
-    )
+    # Optional pre-selection from config.yml (data.defaults). When nothing is
+    # configured these stay None and the file picker starts empty.
+    default_paths = default_input_paths(_CONFIG)
 
     state: dict[str, Any] = {
         "df_gebaeude": None,
@@ -1158,15 +1223,9 @@ def main(page: ft.Page) -> None:
         "df_flaechenpotenzial": None,
         "scenario": None,
         "ylimits": None,
-        "custom_gebaeude": (
-            base_path / "260402_UniSG_Rauminventar_rev_260703.xlsx"
-        ),  # TODO: default paths for testing only, remove later
-        "custom_studierende": (
-            base_path / "prognose_studierende_und_ma_B_260619.xlsx"
-        ),  # TODO: default paths for testing only, remove later
-        "custom_faktoren": (
-            base_path / "nutzungsfaktoren_rev_260610.xlsx"
-        ),  # TODO: default paths for testing only, remove later
+        "custom_gebaeude": default_paths["gebaeude"],
+        "custom_studierende": default_paths["studierende"],
+        "custom_faktoren": default_paths["faktoren"],
     }
 
     # ── Data loading ──────────────────────────────────────────────────────
@@ -1195,7 +1254,9 @@ def main(page: ft.Page) -> None:
         page.update()
         try:
             state["df_gebaeude"] = load_gebaeude_raeume(state["custom_gebaeude"])
-            state["df_flaechenpotenzial"] = load_flaechenpotenzial(state["custom_gebaeude"])
+            state["df_flaechenpotenzial"] = load_flaechenpotenzial(
+                state["custom_gebaeude"]
+            )
             state["df_studierende"] = load_studierende(state["custom_studierende"])
             state["df_faktoren"] = load_nutzungsfaktoren(state["custom_faktoren"])
 
@@ -1248,9 +1309,15 @@ def main(page: ft.Page) -> None:
 
     # ── File picker ──────────────────────────────────────────────────────
 
-    gebaeude_label = ft.Text("Keine Datei gewählt", size=12, italic=True)
-    studierende_label = ft.Text("Keine Datei gewählt", size=12, italic=True)
-    faktoren_label = ft.Text("Keine Datei gewählt", size=12, italic=True)
+    def _file_label(path: Path | None) -> ft.Text:
+        """Sidebar label showing the pre-selected file name, if any."""
+        return ft.Text(
+            Path(path).name if path else "Keine Datei gewählt", size=12, italic=True
+        )
+
+    gebaeude_label = _file_label(default_paths["gebaeude"])
+    studierende_label = _file_label(default_paths["studierende"])
+    faktoren_label = _file_label(default_paths["faktoren"])
 
     async def _pick_file(key: str, label: ft.Text):
         """Open a file-picker dialog for one of the three input datasets.
@@ -1294,7 +1361,7 @@ def main(page: ft.Page) -> None:
         _, df_demand, df_sd = get_results()
         excel_bytes = _build_excel(df_sd, state["df_studierende"], df_demand)
         path = await ft.FilePicker().save_file(
-            file_name=f"raumprognose_{state['scenario']}.xlsx",
+            file_name=f"{_EXCEL_EXPORT_PREFIX}_{state['scenario']}.xlsx",
             allowed_extensions=["xlsx"],
             file_type=ft.FilePickerFileType.CUSTOM,
         )
@@ -1309,7 +1376,7 @@ def main(page: ft.Page) -> None:
         _, _, df_sd = get_results()
         excel_bytes = _build_excel_rounded(df_sd, state["df_studierende"])
         path = await ft.FilePicker().save_file(
-            file_name=f"raumprognose_gerundet_{state['scenario']}.xlsx",
+            file_name=f"{_EXCEL_EXPORT_PREFIX}_gerundet_{state['scenario']}.xlsx",
             allowed_extensions=["xlsx"],
             file_type=ft.FilePickerFileType.CUSTOM,
         )
@@ -1328,7 +1395,7 @@ def main(page: ft.Page) -> None:
             file_type=ft.FilePickerFileType.CUSTOM,
         )
         if path:
-            fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
+            fig.savefig(path, format="png", dpi=CHART_DPI, bbox_inches="tight")
             page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
@@ -1345,7 +1412,7 @@ def main(page: ft.Page) -> None:
             file_type=ft.FilePickerFileType.CUSTOM,
         )
         if path:
-            fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
+            fig.savefig(path, format="png", dpi=CHART_DPI, bbox_inches="tight")
             page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
@@ -1358,7 +1425,7 @@ def main(page: ft.Page) -> None:
             file_type=ft.FilePickerFileType.CUSTOM,
         )
         if path:
-            fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
+            fig.savefig(path, format="png", dpi=CHART_DPI, bbox_inches="tight")
             page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
@@ -1394,7 +1461,7 @@ def main(page: ft.Page) -> None:
             file_type=ft.FilePickerFileType.CUSTOM,
         )
         if path:
-            fig.savefig(path, format="png", dpi=150, bbox_inches="tight")
+            fig.savefig(path, format="png", dpi=CHART_DPI, bbox_inches="tight")
             page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
         plt.close(fig)
@@ -1432,7 +1499,9 @@ def main(page: ft.Page) -> None:
             state["df_studierende"], state["df_faktoren"], state["df_gebaeude"]
         )
         fig_students = _create_students_chart(state["df_studierende"])
-        fig_demand = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
+        fig_demand = _create_demand_chart(
+            df_demand, state["scenario"], ylim=ylimits["demand"]
+        )
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
         eigentumsform_pie_figs = _create_eigentumsform_pie_charts(state["df_gebaeude"])
         sd_figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
@@ -1519,7 +1588,7 @@ def main(page: ft.Page) -> None:
         if state["df_faktoren"] is not None:
             available = state["df_faktoren"]["Szenario"].unique().tolist()
             if state["scenario"] not in available:
-                state["scenario"] = available[0] if available else "Basis"
+                state["scenario"] = available[0] if available else DEFAULT_SZENARIO
                 scenario_dropdown.value = state["scenario"]
 
     # ── Content container ─────────────────────────────────────────────────
@@ -1555,12 +1624,7 @@ def main(page: ft.Page) -> None:
         df_sd_display = _apply_nutzungsart_labels(df_sd)
 
         df_studierende_display = state["df_studierende"].rename(
-            columns={
-                "Forschung_Monatslohn": "Forschung (Monatslohn)",
-                "Forschung_Stundenlohn": "Forschung (Stundenlohn)",
-                "Services_Monatslohn": "Services (Monatslohn)",
-                "Services_Stundenlohn": "Services (Stundenlohn)",
-            }
+            columns=KATEGORIE_LABELS
         )
 
         # ── Tab 1: Übersicht ──────────────────────────────────────────────
@@ -1619,7 +1683,7 @@ def main(page: ft.Page) -> None:
 
         # ── Tab 2: Ergebnisse ─────────────────────────────────────────────
         metric_cards = []
-        for year in [2026, 2030, 2040, 2050]:
+        for year in YEARS_PROGNOSE:
             total_diff = df_sd[df_sd["Jahr"] == year]["Differenz_m2"].sum()
             metric_cards.append(
                 _metric_card(
@@ -1641,7 +1705,7 @@ def main(page: ft.Page) -> None:
             for n in NUTZUNGSART_KEY_ORDER
             if NUTZUNGSART_DISPLAY_MAP.get(n) in pivot.index
         ]
-        pivot = pivot.reindex(columns=[2026, 2030, 2040, 2050], fill_value=0)
+        pivot = pivot.reindex(columns=YEARS_PROGNOSE, fill_value=0)
         pivot.columns = [str(c) for c in pivot.columns]
 
         pivot_columns = [
@@ -1738,7 +1802,9 @@ def main(page: ft.Page) -> None:
 
         # ── Tab 3: Diagramme ─────────────────────────────────────────────
         fig_students = _create_students_chart(state["df_studierende"])
-        fig_demand = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
+        fig_demand = _create_demand_chart(
+            df_demand, state["scenario"], ylim=ylimits["demand"]
+        )
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
         eigentumsform_pie_figs = _create_eigentumsform_pie_charts(state["df_gebaeude"])
         sd_figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
@@ -1757,7 +1823,9 @@ def main(page: ft.Page) -> None:
             )
             for i in range(0, len(eigentumsform_pie_controls), 2)
         ]
-        eigentumsform_pie_column = ft.Column(controls=eigentumsform_pie_rows, spacing=16)
+        eigentumsform_pie_column = ft.Column(
+            controls=eigentumsform_pie_rows, spacing=16
+        )
 
         sd_chart_controls: list[ft.Control] = [
             ft.Container(

@@ -62,11 +62,19 @@ Two independent workflows share the same calculation logic in `app/`:
    `app/calculations.py`, not in SQL models.
 
 Module responsibilities in `app/`:
+- `config.py` — loads `app/assets/config.yml`, deep-merges it over the built-in `_DEFAULTS`, and exposes derived
+  helpers (`nutzungsart_*`, `eigentumsform_*`, `stichjahre`, `default_input_paths`, `get_assets_dir`). All
+  project-/areal-specific values live here rather than in code: branding, Stichjahre, chart colors and labels,
+  the Nutzungsart catalogue, the Eigentumsform mapping, Excel styling, and optional default input paths. A
+  missing or invalid config degrades to `_DEFAULTS` instead of raising.
 - `data_loader.py` — loads and column-validates the three Excel inputs (`gebaeude_raeume`, `studierende`,
-  `nutzungsfaktoren`) into DataFrames.
+  `nutzungsfaktoren`) into DataFrames. Reads sheet name, `usecols` range and the per-Nutzungsart factor
+  multipliers from the config.
 - `calculations.py` — pure pandas functions: `current_area_by_nutzungsart`, `future_demand`, `surplus_deficit`,
   `area_by_eigentumsform`, `wide_results`. These are the functions to target for calculation-logic changes and are
-  unit-tested independently of the UI.
+  unit-tested independently of the UI. They never import `config` — site-specific rules (e.g.
+  `area_by_eigentumsform`'s `eigenmiete_rule` / `rename_map`) are passed in by the caller, so the functions stay
+  pure and testable.
 - `utils.py` — thin DuckDB connection/query helpers for both the in-memory (interactive) and on-disk (batch) modes.
 - `flet_app.py` — the entire UI: layout, tabs, chart building (matplotlib figures), Excel export
   (`_build_excel`, `_build_excel_rounded`), and `main(page)` as the Flet entry point. This is a large, monolithic
@@ -78,6 +86,11 @@ Module responsibilities in `app/`:
 
 Data files live in `data/*.xlsx` (buildings/rooms, student numbers, usage factors per scenario); scenarios are
 named Basis / Wachstum / Digital. `scripts/generate_sample_data.py` regenerates these three files from scratch.
+
+To retarget the tool at a different university/areal, edit `app/assets/config.yml` only — no code change should be
+needed. When adding a new project-specific value, add it to `config.yml` *and* to `_DEFAULTS` in `app/config.py`
+(the defaults are the safety net when the config file is missing), then read it via a helper rather than
+hardcoding it at the use site. The Excel column names of the input files are deliberately *not* configurable.
 
 Tests (`tests/`) cover `calculations.py` (pure function tests with hand-built DataFrames) and `flet_app.py`'s Excel
 export helpers — there is no UI/widget-level testing.
