@@ -23,9 +23,7 @@ def _build_test_workbook():
             "Anzahl": [500, 50, 600, 60],
         }
     )
-    workbook = load_workbook(
-        io.BytesIO(_build_excel_rounded(df_sd, df_studierende))
-    )
+    workbook = load_workbook(io.BytesIO(_build_excel_rounded(df_sd, df_studierende)))
     return workbook["Gerundete Flächen"]
 
 
