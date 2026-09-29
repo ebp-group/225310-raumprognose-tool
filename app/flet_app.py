@@ -29,6 +29,7 @@ import yaml
 matplotlib.use("Agg")  # noqa: E402 – must be set before importing pyplot
 import matplotlib.pyplot as plt  # noqa: E402
 import matplotlib.ticker as mticker  # noqa: E402
+from matplotlib.patches import Patch  # noqa: E402
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -569,8 +570,13 @@ def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     return fig
 
 
-def _create_eigentumsform_pie_charts(df_gebaeude: pd.DataFrame) -> list[tuple[int, plt.Figure]]:
-    """One pie chart per Stichjahr showing the share of area by ownership type."""
+def _create_eigentumsform_pie_charts(
+    df_gebaeude: pd.DataFrame, with_legend: bool = True
+) -> list[tuple[int, plt.Figure]]:
+    """One pie chart per Stichjahr showing the share of area by ownership type.
+
+    With ``with_legend=False`` the legend is omitted and the figure is square.
+    """
     years = [2025, 2026, 2030, 2040]
     df = area_by_eigentumsform(df_gebaeude, years)
 
@@ -583,22 +589,32 @@ def _create_eigentumsform_pie_charts(df_gebaeude: pd.DataFrame) -> list[tuple[in
     )
     pivot = pivot.reindex(columns=years, fill_value=0)
 
-    eigentumsformen = pivot.index.tolist()
+    known = [e for e in _EIGENTUMSFORM_STACK_ORDER if e in pivot.index]
+    eigentumsformen = known + [e for e in pivot.index if e not in known]
     colors = {e: _eigentumsform_color(e, idx) for idx, e in enumerate(eigentumsformen)}
+    legend_handles = [Patch(facecolor=colors[e], label=e) for e in eigentumsformen]
 
     figs: list[tuple[int, plt.Figure]] = []
     for year in years:
         values = pivot[year]
         values = values[values > 0]
-        fig, ax = plt.subplots(figsize=(5, 5))
+        fig, ax = plt.subplots(figsize=(8, 5) if with_legend else (5, 5))
         ax.pie(
             values,
-            labels=values.index.tolist(),
             colors=[colors[e] for e in values.index],
             autopct="%1.1f%%",
             startangle=90,
+            textprops={"fontsize": 16, "fontweight": "bold"},
+            pctdistance=0.7,
         )
         ax.set_title(f"Fläche nach Eigentumsform {year}")
+        if with_legend:
+            ax.legend(
+                handles=legend_handles,
+                title="Eigentumsform",
+                loc="center left",
+                bbox_to_anchor=(1.0, 0.5),
+            )
         fig.tight_layout()
         figs.append((year, fig))
     return figs
@@ -1380,6 +1396,7 @@ def main(page: ft.Page) -> None:
 
     async def _save_eigentumsform_pie_pngs(_e):
         figs = _create_eigentumsform_pie_charts(state["df_gebaeude"])
+        figs_no_legend = _create_eigentumsform_pie_charts(state["df_gebaeude"], with_legend=False)
 
         path = await ft.FilePicker().save_file(
             file_name="eigentumsform_kuchen.zip",
@@ -1388,14 +1405,15 @@ def main(page: ft.Page) -> None:
         )
         if path:
             zip_bytes = _build_png_zip(
-                [(f"eigentumsform_{year}.png", fig) for year, fig in figs]
+                [(f"eigentumsform_{year}_mit_legende.png", fig) for year, fig in figs]
+                + [(f"eigentumsform_{year}_ohne_legende.png", fig) for year, fig in figs_no_legend]
             )
             with open(path, "wb") as f:
                 f.write(zip_bytes)
             page.show_dialog(ft.SnackBar(content=ft.Text(f"Gespeichert: {path}")))
             page.update()
 
-        for _, fig in figs:
+        for _, fig in figs + figs_no_legend:
             plt.close(fig)
 
     async def _save_flaechenpotenzial_png(_e):
@@ -1450,6 +1468,9 @@ def main(page: ft.Page) -> None:
         fig_demand = _create_demand_chart(df_demand, state["scenario"], ylim=ylimits["demand"])
         fig_eigentumsform = _create_eigentumsform_chart(state["df_gebaeude"])
         eigentumsform_pie_figs = _create_eigentumsform_pie_charts(state["df_gebaeude"])
+        eigentumsform_pie_figs_no_legend = _create_eigentumsform_pie_charts(
+            state["df_gebaeude"], with_legend=False
+        )
         sd_figs = _create_surplus_deficit_charts(df_sd, ylim=ylimits["surplus_deficit"])
         fig_flaechenpotenzial = (
             _create_flaechenpotenzial_chart(
@@ -1471,8 +1492,12 @@ def main(page: ft.Page) -> None:
                     (f"flaechenbedarf_{state['scenario']}.png", fig_demand),
                     ("eigentumsform.png", fig_eigentumsform),
                     *[
-                        (f"eigentumsform_{year}.png", fig)
+                        (f"eigentumsform_{year}_mit_legende.png", fig)
                         for year, fig in eigentumsform_pie_figs
+                    ],
+                    *[
+                        (f"eigentumsform_{year}_ohne_legende.png", fig)
+                        for year, fig in eigentumsform_pie_figs_no_legend
                     ],
                     *[
                         (f"ueberschuss_defizit_{year}_{state['scenario']}.png", fig)
@@ -1493,7 +1518,7 @@ def main(page: ft.Page) -> None:
         plt.close(fig_students)
         plt.close(fig_demand)
         plt.close(fig_eigentumsform)
-        for _, fig in eigentumsform_pie_figs:
+        for _, fig in eigentumsform_pie_figs + eigentumsform_pie_figs_no_legend:
             plt.close(fig)
         for _, fig in sd_figs:
             plt.close(fig)
