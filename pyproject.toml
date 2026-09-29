@@ -9,9 +9,10 @@ dependencies = [
     "flet",
     "pandas",
     "openpyxl",
+    "pyyaml",
     "matplotlib",
     "flet-datatable2>=0.84.0",
-    "marimo",
+    "marimo>=0.23.3",
 ]
 
 [project.scripts]

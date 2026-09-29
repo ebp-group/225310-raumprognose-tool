@@ -32,6 +32,7 @@ def _():
     import matplotlib.pyplot as plt
     import pandas as pd
 
+    from .config import default_input_paths
     from .calculations import (
         current_area_by_nutzungsart,
         future_demand,
@@ -49,6 +50,7 @@ def _():
         Path,
         io,
         current_area_by_nutzungsart,
+        default_input_paths,
         future_demand,
         load_gebaeude_raeume,
         load_nutzungsfaktoren,
@@ -67,6 +69,7 @@ def _():
 @app.cell
 def _(
     Path,
+    default_input_paths,
     get_in_memory_connection,
     load_dataframe,
     load_gebaeude_raeume,
@@ -77,14 +80,24 @@ def _(
 ):
     mo.md("## 1 – Load Excel data into in-memory DuckDB")
 
-    default_base_path = Path(
-        r"C:\Users\ods\OneDrive - EBP\CH_P_225310 - PE_TPF_UniSG - General\40_BEARBEITUNG\04_Auswertung\02_Datenmodell"
-    )
-    base_path = Path(os.environ.get("RAUMPROG_DATA_DIR", str(default_base_path)))
+    # Input files: RAUMPROG_DATA_DIR wins, otherwise the optional defaults from
+    # config.yml (data.defaults) are used.
+    config_paths = default_input_paths()
+    data_dir = os.environ.get("RAUMPROG_DATA_DIR")
 
-    gebaeude_file = base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"
-    studierende_file = base_path / "prognose_studierende_und_ma.xlsx"
-    faktoren_file = base_path / "nutzungsfaktoren.xlsx"
+    def _input_file(key: str) -> Path:
+        if data_dir and config_paths[key] is not None:
+            return Path(data_dir) / Path(config_paths[key]).name
+        if config_paths[key] is not None:
+            return Path(config_paths[key])
+        raise ValueError(
+            f"Keine Eingabedatei für '{key}' konfiguriert. Bitte data.defaults in "
+            "app/assets/config.yml setzen oder RAUMPROG_DATA_DIR verwenden."
+        )
+
+    gebaeude_file = _input_file("gebaeude")
+    studierende_file = _input_file("studierende")
+    faktoren_file = _input_file("faktoren")
 
     df_gebaeude = load_gebaeude_raeume(gebaeude_file)
     df_studierende = load_studierende(studierende_file)
@@ -144,8 +157,10 @@ def _(current_area_by_nutzungsart, df_gebaeude, df_studierende, mo):
     _years = sorted(df_studierende["Jahr"].unique().tolist())
     df_current = current_area_by_nutzungsart(df_gebaeude, _years)
 
-    mo.vstack([
-        mo.md("""
+    mo.vstack(
+        [
+            mo.md(
+                """
 **SQL (DuckDB):**
 ```sql
 SELECT g."Raumtyp EBP", y."Jahr", SUM(g."Fläche") AS "Fläche"
@@ -156,9 +171,11 @@ WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
 GROUP BY g."Raumtyp EBP", y."Jahr"
 ORDER BY g."Raumtyp EBP", y."Jahr"
 ```
-"""),
-        mo.ui.table(df_current),
-    ])
+"""
+            ),
+            mo.ui.table(df_current),
+        ]
+    )
     return (df_current,)
 
 
@@ -169,8 +186,10 @@ def _(df_faktoren, df_studierende, future_demand, mo, scenario_selector):
     selected_scenario = scenario_selector.value
     df_demand = future_demand(df_studierende, df_faktoren, selected_scenario)
 
-    mo.vstack([
-        mo.md(f"""
+    mo.vstack(
+        [
+            mo.md(
+                f"""
 **SQL (DuckDB)** – Szenario: `{selected_scenario}`
 ```sql
 SELECT f."Nutzungsart", s."Jahr",
@@ -189,9 +208,11 @@ JOIN (
 ORDER BY f."Nutzungsart", s."Jahr"
 ```
 *(Die Studierenden-Tabelle liegt bereits in Langform vor; `Kategorie` wird direkt mit `Bezug` verknüpft. CEIL rundet den Bezugswert auf das nächste Vielfache von „Schritt" auf, bevor mit dem Faktor multipliziert wird.)*
-"""),
-        mo.ui.table(df_demand),
-    ])
+"""
+            ),
+            mo.ui.table(df_demand),
+        ]
+    )
     return df_demand, selected_scenario
 
 
@@ -201,8 +222,10 @@ def _(df_current, df_demand, mo, surplus_deficit):
 
     df_sd = surplus_deficit(df_current, df_demand)
 
-    mo.vstack([
-        mo.md("""
+    mo.vstack(
+        [
+            mo.md(
+                """
 **SQL (DuckDB):**
 ```sql
 SELECT d."Nutzungsart", d."Jahr",
@@ -213,11 +236,13 @@ FROM demand AS d
 LEFT JOIN current_area AS c
        ON d."Nutzungsart" = c."Raumtyp EBP"
 ```
-*(Positive Differenz = Überschuss, negative Differenz = Defizit.  
+*(Positive Differenz = Überschuss, negative Differenz = Defizit.
 `NULL` in „Fläche" und „Differenz\_m2" bedeutet: keine Ist-Fläche für diese Nutzungsart vorhanden.)*
-"""),
-        mo.ui.table(df_sd),
-    ])
+"""
+            ),
+            mo.ui.table(df_sd),
+        ]
+    )
     return (df_sd,)
 
 
@@ -227,8 +252,10 @@ def _(df_sd, mo, wide_results):
 
     df_wide = wide_results(df_sd)
 
-    mo.vstack([
-        mo.md("""
+    mo.vstack(
+        [
+            mo.md(
+                """
 **SQL (DuckDB):**
 ```sql
 PIVOT sd
@@ -238,9 +265,11 @@ GROUP BY "Nutzungsart"
 ORDER BY "Nutzungsart"
 ```
 *(Eine Spalte pro Prognosejahr; Werte = `Differenz_m2` aus Schritt C.)*
-"""),
-        mo.ui.table(df_wide.reset_index()),
-    ])
+"""
+            ),
+            mo.ui.table(df_wide.reset_index()),
+        ]
+    )
     return (df_wide,)
 
 

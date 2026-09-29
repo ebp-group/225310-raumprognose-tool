@@ -1,41 +1,214 @@
+# Konfiguration des Raumprognose Tools
+#
+# Diese Datei enthält alle projekt- bzw. arealspezifischen Werte. Für ein neues
+# Areal (andere Universität, anderer Campus) sollte ausschliesslich diese Datei
+# angepasst werden müssen – nicht der Python-Code.
+#
+# Fehlt ein Schlüssel, greift der eingebaute Standardwert aus app/config.py.
+# Fehlt oder bricht die ganze Datei, startet die App mit allen Standardwerten.
+
+# ── Applikation / Branding ────────────────────────────────────────────────────
+app:
+  name: "Raumprognose Tool"
+  title_emoji: "🏛️"
+  organization: "EBP"
+  copyright_year: "2026"
+  license_name: "BSD 3-Clause License"
+  documentation_url: "https://ebp-group.github.io/225310-raumprognose-tool/"
+  window:
+    width: 1400
+    height: 900
+
+# ── Areal / Projekt ───────────────────────────────────────────────────────────
+areal:
+  # Wird u.a. im Flächenpotenzial-Diagramm als "{areal}" eingesetzt.
+  name: "UniSG"
+  # Beschriftung der Bestandes-Säule im Flächenpotenzial-Diagramm.
+  label: "Areal"
+
+# ── Stichjahre ────────────────────────────────────────────────────────────────
+years:
+  # Bedarfs-/Differenz-Diagramme, Metrik-Karten, Pivot-Tabelle
+  prognose: [2026, 2030, 2040, 2050]
+  # Eigentumsform-Diagramme (Balken + Kuchen)
+  bestand: [2025, 2026, 2030, 2040]
+  # Stichjahr des Flächenpotenzial-Diagramms
+  flaechenpotenzial: 2040
+  # Im Excel-Export sichtbare Jahresspalten (übrige werden ausgeblendet)
+  excel_visible: [2025, 2030, 2040, 2050]
+
+# ── Diagramme ─────────────────────────────────────────────────────────────────
+charts:
+  dpi: 150
+  # Rand ober-/unterhalb der Datenwerte bei automatischer Skalierung (5 %)
+  axis_margin: 0.05
+  # Farbe für Nutzungsarten ohne konfigurierte Farbe
+  fallback_color: "#7f7f7f"
+  # Colormap für Eigentumsformen ohne konfigurierte Farbe
+  fallback_colormap: "tab20"
+
+  students:
+    # Diese Kategorien werden als Linien gezeichnet (in dieser Reihenfolge).
+    categories: ["Studierende", "Forschung", "Services", "Stundenlohn"]
+    colormap: "tab10"
+    # Feste obere y-Achsen-Grenze, damit zwei Prognosen vergleichbar sind.
+    # null = automatisch aus den Daten skalieren.
+    ylim_top: 12000
+    title: "Entwicklung nach Kategorie"
+
+  flaechenpotenzial:
+    bestand_label: "Bestand (Eigentum und Miete)"
+    bestand_color: "#7aa2c0"
+    potenzial_label: "Potenzial (Eigentum und Miete)"
+    potenzial_color: "#8cb48c"
+    bedarf_label: "Flächenbedarf SOLL {areal}"
+    bedarf_color: "#dfa02d"
+    ylabel: "Flächen (m² GF)"
+
+# ── Nutzungsarten ─────────────────────────────────────────────────────────────
+# column_name          : Rohwert in den Excel-Daten (Spalte "Raumtyp EBP" bzw. "nutzungsart")
+# name                 : Anzeigename in UI, Diagrammen und Excel-Export
+# color                : Balken- bzw. Zellenfarbe
+# sort_order           : Reihenfolge in Tabellen und Diagrammen
+# gruppe               : "lehre" oder "buero" – steuert die Zwischentotale im Excel-Export
+# faktor_multiplikator : optional; multipliziert faktor_m2_pro_person beim Einlesen
 nutzungsarten:
   - name: "Pool Vortragsräume"
     column_name: "Vortrag"
     color: "#234b60"
     sort_order: 1
+    gruppe: "lehre"
   - name: "Lern & Zusammenarbeitsräume"
     column_name: "Lernen"
     color: "#af2832"
     sort_order: 2
+    gruppe: "lehre"
   - name: "Lernarbeitsplätze Fokus & Kollaboration"
     column_name: "LAP F&K"
     color: "#dfa02d"
     sort_order: 3
+    gruppe: "lehre"
   - name: "Lernarbeitsplätze Meetingplaces"
     column_name: "LAP M"
     color: "#a6741a"
     sort_order: 4
+    gruppe: "lehre"
   - name: "Sport"
     column_name: "Sport"
     color: "#58768c"
     sort_order: 5
+    gruppe: "lehre"
   - name: "Bibliothek"
     column_name: "Bibliothek"
     color: "#58768c"
     sort_order: 6
+    gruppe: "lehre"
   - name: "Gastro"
     column_name: "Gastro"
     color: "#5f915f"
     sort_order: 7
+    gruppe: "lehre"
   - name: "Spezialräume"
     column_name: "Spezialräume"
     color: "#7f7f7f"
     sort_order: 8
+    gruppe: "lehre"
   - name: "Vereine - Initiativen"
     column_name: "Vereine Initiativen"
     color: "#d36821"
     sort_order: 9
+    gruppe: "lehre"
   - name: "Büro"
     column_name: "Büro"
     color: "#8f45c7"
     sort_order: 10
+    gruppe: "buero"
+    # m² pro Arbeitsplatz
+    faktor_multiplikator: 14.5
+
+# ── Eigentumsformen ───────────────────────────────────────────────────────────
+eigentumsformen:
+  # Sonderfall: eine Mietliegenschaft dieses Eigentümers zählt als "Eigenmiete".
+  # Auf null setzen, wenn das Areal keine solche Regel kennt.
+  eigenmiete_rule:
+    eigentumsform: "Mietliegenschaften"
+    eigentuemer: "Hochbauamt St. Gallen"
+    as: "Eigenmiete"
+
+  # Umbenennung der Rohwerte auf die Anzeigelabels (inkl. Diagrammfarbe).
+  mapping:
+    - from: "Eigenmiete"
+      to: "Eigentum Kanton St.Gallen - Miete temporär"
+      color: "#bad1ba"
+    - from: "Mietliegenschaften"
+      to: "Eigentum Dritter - Miete temporär"
+      color: "#7aa2c0"
+    - from: "Nutzungsvereinbarung"
+      to: "Eigentum Kanton St.Gallen - langfristige Nutzung"
+      color: "#8cb48c"
+    - from: "Stiftungs- und Drittliegenschaften"
+      to: "Eigentum Stiftungen - Miete temporär"
+      color: "#aec7d9"
+
+# ── Personen-Kategorien ───────────────────────────────────────────────────────
+kategorien:
+  # Diese Kategorie zählt als "Studierende", alle übrigen als "Mitarbeitende".
+  studierende: "Studierende"
+  # Anzeigenamen für Kategoriespalten in der Übersichtstabelle.
+  labels:
+    Forschung_Monatslohn: "Forschung (Monatslohn)"
+    Forschung_Stundenlohn: "Forschung (Stundenlohn)"
+    Services_Monatslohn: "Services (Monatslohn)"
+    Services_Stundenlohn: "Services (Stundenlohn)"
+
+# ── Szenarien ─────────────────────────────────────────────────────────────────
+szenarien:
+  # Fallback, wenn die Nutzungsfaktoren-Datei kein Szenario liefert.
+  default: "Basis"
+
+# ── Excel-Export ──────────────────────────────────────────────────────────────
+excel:
+  # Flächen werden im Export "Gerundete Flächen" auf dieses Vielfache gerundet.
+  rounding_step: 5
+  header_fill: "1F4E79"
+  header_font_color: "FFFFFF"
+  subheader_fill: "D9D9D9"
+  positive_color: "006100"
+  negative_color: "9C0006"
+  number_column_width: 14
+  m2_number_format: '#,##0" m²"'
+  headcount_number_format: "#,##0"
+  export_prefix: "raumprognose"
+  sheet_names:
+    ergebnisse: "Ergebnisse"
+    studierende: "Studierende"
+    flaechenbedarf: "Flächenbedarf"
+    gerundet: "Gerundete Flächen"
+  row_labels:
+    raumtypen: "Raumtypen"
+    total_lehre: "Total Lehre HNF 1 / 3 / 5"
+    total_buero: "Total Büro HNF 2"
+    total_gesamt: "Total Lehre und Büro HNF 1 / 2 / 3 / 5"
+    anzahl_studierende: "Anzahl Studierende"
+    anzahl_mitarbeitende: "Anzahl Mitarbeitende"
+
+# ── Dateneingabe ──────────────────────────────────────────────────────────────
+data:
+  # Optionales Zusatzblatt in der Rauminventar-Datei; fehlt es, entfällt das
+  # Flächenpotenzial-Diagramm.
+  flaechenpotenzial_sheet: "Flaechenpotenzial_UniSG"
+  # Eingelesener Spaltenbereich der Rauminventar-Datei.
+  gebaeude_usecols: "A:S"
+
+  # Optionale Vorauswahl im Datei-Picker. null = keine Vorauswahl.
+  # Relative Dateinamen werden gegen base_path aufgelöst.
+  defaults:
+    base_path: null
+    gebaeude: null
+    studierende: null
+    faktoren: null
+    # Beispiel für eine lokale Entwicklungsumgebung:
+    # base_path: "C:/Pfad/zum/Datenmodell"
+    # gebaeude: "Rauminventar.xlsx"
+    # studierende: "prognose_studierende_und_ma.xlsx"
+    # faktoren: "nutzungsfaktoren.xlsx"

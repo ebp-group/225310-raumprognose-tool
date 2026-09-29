@@ -33,7 +33,9 @@ def test_current_area_by_nutzungsart_groups_and_sorts() -> None:
     assert_frame_equal(result, expected)
 
 
-def test_current_area_by_nutzungsart_filters_by_betriebsaufnahme_and_betriebsende() -> None:
+def test_current_area_by_nutzungsart_filters_by_betriebsaufnahme_and_betriebsende() -> (
+    None
+):
     df_gebaeude = pd.DataFrame(
         {
             "Raumtyp EBP": ["Seminar", "Seminar", "Labor"],
@@ -62,7 +64,14 @@ def test_future_demand_with_nutzungsart_and_kategorie_summe() -> None:
         {
             "Jahr": [2030, 2030, 2030, 2040, 2040, 2040],
             "Anzahl": [250, 50, 100, 300, 60, 150],
-            "Kategorie": ["Forschung", "Forschung", "Services", "Forschung", "Forschung", "Services"],
+            "Kategorie": [
+                "Forschung",
+                "Forschung",
+                "Services",
+                "Forschung",
+                "Forschung",
+                "Services",
+            ],
         }
     )
     df_faktoren = pd.DataFrame(
@@ -241,6 +250,21 @@ def _make_gebaeude(rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame([{**defaults, **r} for r in rows])
 
 
+# Site-specific rules, mirrored from app/assets/config.yml. Passing them
+# explicitly keeps these tests independent of the shipped configuration.
+_EIGENMIETE_RULE = {
+    "eigentumsform": "Mietliegenschaften",
+    "eigentuemer": "Hochbauamt St. Gallen",
+    "as": "Eigenmiete",
+}
+_RENAME_MAP = {
+    "Eigenmiete": "Eigentum Kanton St.Gallen - Miete temporär",
+    "Mietliegenschaften": "Eigentum Dritter - Miete temporär",
+    "Nutzungsvereinbarung": "Eigentum Kanton St.Gallen - langfristige Nutzung",
+    "Stiftungs- und Drittliegenschaften": "Eigentum Stiftungen - Miete temporär",
+}
+
+
 def test_area_by_eigentumsform_groups_and_sorts() -> None:
     df = _make_gebaeude(
         [
@@ -260,7 +284,9 @@ def test_area_by_eigentumsform_groups_and_sorts() -> None:
     assert_frame_equal(result, expected)
 
 
-def test_area_by_eigentumsform_maps_mietliegenschaften_hochbauamt_to_eigenmiete() -> None:
+def test_area_by_eigentumsform_maps_mietliegenschaften_hochbauamt_to_eigenmiete() -> (
+    None
+):
     df = _make_gebaeude(
         [
             # Should become 'Eigenmiete'
@@ -279,10 +305,16 @@ def test_area_by_eigentumsform_maps_mietliegenschaften_hochbauamt_to_eigenmiete(
             {"Eigentumsform": "Eigentum", "Fläche": 50.0},
         ]
     )
-    result = area_by_eigentumsform(df, [2030])
+    result = area_by_eigentumsform(
+        df, [2030], eigenmiete_rule=_EIGENMIETE_RULE, rename_map=_RENAME_MAP
+    )
     expected = pd.DataFrame(
         {
-            "Eigentumsform": ["Eigentum Kanton St.Gallen - Miete temporär", "Eigentum", "Eigentum Dritter - Miete temporär"],
+            "Eigentumsform": [
+                "Eigentum Kanton St.Gallen - Miete temporär",
+                "Eigentum",
+                "Eigentum Dritter - Miete temporär",
+            ],
             "Jahr": [2030, 2030, 2030],
             "Fläche": [300.0, 50.0, 120.0],
         }
@@ -302,12 +334,37 @@ def test_area_by_eigentumsform_merges_eigenmiete_with_existing_eigenmiete() -> N
             {"Eigentumsform": "Eigenmiete", "Fläche": 100.0},
         ]
     )
-    result = area_by_eigentumsform(df, [2030])
+    result = area_by_eigentumsform(
+        df, [2030], eigenmiete_rule=_EIGENMIETE_RULE, rename_map=_RENAME_MAP
+    )
     expected = pd.DataFrame(
         {
             "Eigentumsform": ["Eigentum Kanton St.Gallen - Miete temporär"],
             "Jahr": [2030],
             "Fläche": [400.0],
+        }
+    )
+    assert_frame_equal(result, expected)
+
+
+def test_area_by_eigentumsform_without_rules_keeps_raw_values() -> None:
+    """No eigenmiete_rule / rename_map means a plain pass-through aggregation."""
+    df = _make_gebaeude(
+        [
+            {
+                "Eigentumsform": "Mietliegenschaften",
+                "Eigentümer": "Hochbauamt St. Gallen",
+                "Fläche": 300.0,
+            },
+            {"Eigentumsform": "Eigenmiete", "Fläche": 100.0},
+        ]
+    )
+    result = area_by_eigentumsform(df, [2030])
+    expected = pd.DataFrame(
+        {
+            "Eigentumsform": ["Eigenmiete", "Mietliegenschaften"],
+            "Jahr": [2030, 2030],
+            "Fläche": [100.0, 300.0],
         }
     )
     assert_frame_equal(result, expected)

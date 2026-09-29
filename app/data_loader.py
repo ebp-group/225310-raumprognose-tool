@@ -8,17 +8,33 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import IO
+from typing import IO, Any
 
 import pandas as pd
-from utils import get_in_memory_connection, query_to_dataframe
+from config import get_config, nutzungsart_multipliers
 
-_DATA_DIR = Path(__file__).parent.parent / "data"
-
-_GEBAEUDE_COLS = {"Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche m²", "Betriebsaufnahme", "Betriebsende"}
+_GEBAEUDE_COLS = {
+    "Eigentumsform",
+    "Abgabeart",
+    "Eigentümer",
+    "Raumtyp EBP",
+    "Fläche m²",
+    "Betriebsaufnahme",
+    "Betriebsende",
+}
 _STUDIERENDE_COLS = {"Jahr", "Anzahl", "Beschreibung", "Kategorie"}
-_NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_person", "schritt", "bezug"}
-_FLAECHENPOTENZIAL_SHEET = "Flaechenpotenzial_UniSG"
+_NUTZUNGSFAKTOREN_COLS = {
+    "szenario",
+    "nutzungsart",
+    "faktor_m2_pro_person",
+    "schritt",
+    "bezug",
+}
+
+
+def _data_setting(key: str) -> Any:
+    """Return ``data.<key>`` from the configuration."""
+    return (get_config().get("data") or {}).get(key)
 
 
 FileSource = str | Path | IO[bytes]
@@ -58,24 +74,43 @@ def load_gebaeude_raeume(
     Raises:
         ValueError: If required columns are missing.
     """
-    df = pd.read_excel(source, engine="openpyxl", header=0, usecols="A:S")
+    df = pd.read_excel(
+        source, engine="openpyxl", header=0, usecols=_data_setting("gebaeude_usecols")
+    )
     _validate_columns(df, _GEBAEUDE_COLS, os.path.basename(source))
-    
-    df = df.rename(columns={
-        "Fläche m²": "Fläche",
-    })
 
-    df["Betriebsaufnahme"] = pd.to_numeric(df["Betriebsaufnahme"], errors="coerce").astype("Int64")
-    df["Betriebsende"] = pd.to_numeric(df["Betriebsende"], errors="coerce").astype("Int64")
+    df = df.rename(
+        columns={
+            "Fläche m²": "Fläche",
+        }
+    )
+
+    df["Betriebsaufnahme"] = pd.to_numeric(
+        df["Betriebsaufnahme"], errors="coerce"
+    ).astype("Int64")
+    df["Betriebsende"] = pd.to_numeric(df["Betriebsende"], errors="coerce").astype(
+        "Int64"
+    )
     df["Fläche"] = pd.to_numeric(df["Fläche"], errors="coerce").astype("float64")
 
-    return df[df["Raumtyp EBP"].notna()].filter(["Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche", "Betriebsaufnahme", "Betriebsende"])
+    return df[df["Raumtyp EBP"].notna()].filter(
+        [
+            "Eigentumsform",
+            "Abgabeart",
+            "Eigentümer",
+            "Raumtyp EBP",
+            "Fläche",
+            "Betriebsaufnahme",
+            "Betriebsende",
+        ]
+    )
 
 
 def load_flaechenpotenzial(source: FileSource) -> pd.DataFrame | None:
     """Load the optional Flächenpotenzial sheet from the Rauminventar workbook.
 
-    The sheet (named ``Flaechenpotenzial_UniSG``) is optional; buildings-and-rooms
+    The sheet name comes from ``data.flaechenpotenzial_sheet`` in ``config.yml``.
+    The sheet is optional; buildings-and-rooms
     workbooks without it simply don't offer the Flächenpotenzial chart. When
     present, it is expected to hold exactly three columns in order: the
     evaluation year (``Jahr Auswertung``), the building (``Gebäude``), and the
@@ -89,27 +124,31 @@ def load_flaechenpotenzial(source: FileSource) -> pd.DataFrame | None:
 
     Returns:
         DataFrame with columns ``Jahr Auswertung``, ``Gebäude``, and
-        ``Flächenpotential``, or ``None`` if the workbook has no sheet named
-        ``Flaechenpotenzial_UniSG``.
+        ``Flächenpotential``, or ``None`` if the workbook has no such sheet.
 
     Raises:
         ValueError: If the sheet exists but has fewer than 3 columns.
     """
+    sheet_name = _data_setting("flaechenpotenzial_sheet")
     excel_file = pd.ExcelFile(source, engine="openpyxl")
-    if _FLAECHENPOTENZIAL_SHEET not in excel_file.sheet_names:
+    if sheet_name not in excel_file.sheet_names:
         return None
 
-    df = pd.read_excel(excel_file, sheet_name=_FLAECHENPOTENZIAL_SHEET, header=0)
+    df = pd.read_excel(excel_file, sheet_name=sheet_name, header=0)
     if df.shape[1] < 3:
         raise ValueError(
-            f"Sheet '{_FLAECHENPOTENZIAL_SHEET}' in '{os.path.basename(source)}' "
+            f"Sheet '{sheet_name}' in '{os.path.basename(source)}' "
             "must have at least 3 columns (Jahr Auswertung, Gebäude, Flächenpotential)."
         )
 
     df = df.iloc[:, :3].copy()
     df.columns = ["Jahr Auswertung", "Gebäude", "Flächenpotential"]
-    df["Jahr Auswertung"] = pd.to_numeric(df["Jahr Auswertung"], errors="coerce").astype("Int64")
-    df["Flächenpotential"] = pd.to_numeric(df["Flächenpotential"], errors="coerce").astype("float64")
+    df["Jahr Auswertung"] = pd.to_numeric(
+        df["Jahr Auswertung"], errors="coerce"
+    ).astype("Int64")
+    df["Flächenpotential"] = pd.to_numeric(
+        df["Flächenpotential"], errors="coerce"
+    ).astype("float64")
     return df
 
 
@@ -129,16 +168,15 @@ def load_studierende(
         ValueError: If required columns are missing.
     """
     df = pd.read_excel(source, engine="openpyxl")
+    _validate_columns(df, _STUDIERENDE_COLS, os.path.basename(source))
+
     df["Jahr"] = df["Jahr"].astype(int)
     df["Anzahl"] = df["Anzahl"].round(0).astype(int)
-    _validate_columns(df, _STUDIERENDE_COLS,  os.path.basename(source))
 
     return df
 
 
-def load_nutzungsfaktoren(
-    source: FileSource
-) -> pd.DataFrame:
+def load_nutzungsfaktoren(source: FileSource) -> pd.DataFrame:
     """Load the usage-factors Excel file.
 
     Args:
@@ -158,16 +196,18 @@ def load_nutzungsfaktoren(
     df["faktor_m2_pro_person"] = df["faktor_m2_pro_person"].astype(float)
     df["schritt"] = df["schritt"].astype(int)
 
-    # multiply the factor for office by 14.5 m2
-    df.loc[df["nutzungsart"] == "Büro", "faktor_m2_pro_person"] *= 14.5
+    # Per-Nutzungsart multipliers from config.yml (e.g. m² per workplace for
+    # offices, where the raw factor is "persons per unit" rather than m²).
+    for nutzungsart, multiplier in nutzungsart_multipliers().items():
+        df.loc[df["nutzungsart"] == nutzungsart, "faktor_m2_pro_person"] *= multiplier
 
-    
-
-    df = df.rename(columns={
-        "szenario": "Szenario",
-        "nutzungsart": "Nutzungsart",
-        "faktor_m2_pro_person": "Faktor_m2_pro_Person",
-        "schritt": "Schritt",
-        "bezug": "Bezug",
-    })
+    df = df.rename(
+        columns={
+            "szenario": "Szenario",
+            "nutzungsart": "Nutzungsart",
+            "faktor_m2_pro_person": "Faktor_m2_pro_Person",
+            "schritt": "Schritt",
+            "bezug": "Bezug",
+        }
+    )
     return df

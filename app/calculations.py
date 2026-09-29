@@ -8,6 +8,8 @@ short-lived in-memory DuckDB connection and runs SQL for the computation.
 
 from __future__ import annotations
 
+from typing import Any
+
 import duckdb
 import pandas as pd
 
@@ -104,8 +106,7 @@ def future_demand(
     missing_stud_cols = sorted(required_stud_cols - set(df_studierende.columns))
     if missing_stud_cols:
         raise ValueError(
-            "Folgende Spalten fehlen in den Studierenden-Daten: "
-            f"{missing_stud_cols}"
+            "Folgende Spalten fehlen in den Studierenden-Daten: " f"{missing_stud_cols}"
         )
 
     # Validate early in Python so we can produce clear error messages before
@@ -133,7 +134,7 @@ def future_demand(
         return conn.execute(
             """
             SELECT Nutzungsart, Jahr, sum(Bedarf_m2) AS Bedarf_m2
-            FROM ( 
+            FROM (
             SELECT f."Nutzungsart", s."Jahr",
                    CASE
                        WHEN f."Schritt" IS NOT NULL AND f."Schritt" > 0
@@ -189,7 +190,8 @@ def surplus_deficit(
         conn.register("current_area", df_current)
         conn.register("demand", df_demand)
         # ROW_NUMBER preserves the original row order of the demand table.
-        return conn.execute("""
+        return conn.execute(
+            """
             SELECT d."Nutzungsart", d."Jahr",
                    c."Fläche",
                    d."Bedarf_m2",
@@ -199,12 +201,15 @@ def surplus_deficit(
                    ON d."Nutzungsart" = c."Raumtyp EBP"
                   AND d."Jahr"        = c."Jahr"
             ORDER BY d._rn
-        """).fetchdf()
+        """
+        ).fetchdf()
 
 
 def area_by_eigentumsform(
     df_gebaeude: pd.DataFrame,
     years: list[int],
+    eigenmiete_rule: dict[str, str] | None = None,
+    rename_map: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Aggregate the available total area (m²) by ownership type and year.
 
@@ -214,9 +219,9 @@ def area_by_eigentumsform(
     treated as "unbounded" (i.e. the room is always available in that
     direction).
 
-    Special case: rows where ``Eigentumsform = 'Mietliegenschaften'`` **and**
-    ``Eigentümer = 'Hochbauamt St. Gallen'`` are counted under the category
-    ``'Eigenmiete'`` instead of ``'Mietliegenschaften'``.
+    Both the owner special case and the relabelling are site-specific and are
+    therefore passed in by the caller (the Flet app feeds them from
+    ``config.yml``) rather than hardcoded here.
 
     Args:
         df_gebaeude: Buildings-and-rooms DataFrame with at least the columns
@@ -224,18 +229,24 @@ def area_by_eigentumsform(
             and ``Betriebsende``.
         years: List of forecast years for which the available area should be
             calculated.
+        eigenmiete_rule: Optional owner special case with the keys
+            ``eigentumsform``, ``eigentuemer`` and ``as``. Rows matching both
+            the given Eigentumsform *and* Eigentümer are counted under the
+            ``as`` category instead. ``None`` disables the special case.
+        rename_map: Optional mapping of raw Eigentumsform values to display
+            labels, applied after aggregation. ``None`` keeps the raw values.
 
     Returns:
         DataFrame with columns ``Eigentumsform``, ``Jahr``, and ``Fläche``,
         sorted by ``Eigentumsform`` and ``Jahr``.
 
-    SQL equivalent::
+    SQL equivalent (with *eigenmiete_rule* supplied)::
 
         SELECT
             CASE
-                WHEN g."Eigentumsform" = 'Mietliegenschaften'
-                     AND g."Eigentümer" = 'Hochbauamt St. Gallen'
-                THEN 'Eigenmiete'
+                WHEN g."Eigentumsform" = :eigentumsform
+                     AND g."Eigentümer" = :eigentuemer
+                THEN :as
                 ELSE g."Eigentumsform"
             END AS "Eigentumsform",
             y."Jahr",
@@ -244,49 +255,51 @@ def area_by_eigentumsform(
         CROSS JOIN (SELECT UNNEST(years) AS "Jahr") AS y
         WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
           AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
-        GROUP BY
-            CASE
-                WHEN g."Eigentumsform" = 'Mietliegenschaften'
-                     AND g."Eigentümer" = 'Hochbauamt St. Gallen'
-                THEN 'Eigenmiete'
-                ELSE g."Eigentumsform"
-            END,
-            y."Jahr"
-        ORDER BY "Eigentumsform", y."Jahr"
+        GROUP BY 1, 2
+        ORDER BY 1, 2
     """
+    # Grouping by ordinal keeps the CASE expression in a single place, so the
+    # rule parameters only have to be bound once.
+    params: list[Any] = []
+    if eigenmiete_rule:
+        eigentumsform_expr = (
+            "CASE\n"
+            '                    WHEN g."Eigentumsform" = ?\n'
+            '                         AND g."Eigentümer" = ?\n'
+            "                    THEN ?\n"
+            '                    ELSE g."Eigentumsform"\n'
+            "                END"
+        )
+        params.extend(
+            [
+                eigenmiete_rule["eigentumsform"],
+                eigenmiete_rule["eigentuemer"],
+                eigenmiete_rule["as"],
+            ]
+        )
+    else:
+        eigentumsform_expr = 'g."Eigentumsform"'
+    params.append(years)
+
     with duckdb.connect(":memory:") as conn:
         conn.register("gebaeude", df_gebaeude)
-        df =  conn.execute(
-            """
+        df = conn.execute(
+            f"""
             SELECT
-                CASE
-                    WHEN g."Eigentumsform" = 'Mietliegenschaften'
-                         AND g."Eigentümer" = 'Hochbauamt St. Gallen'
-                    THEN 'Eigenmiete'
-                    ELSE g."Eigentumsform"
-                END AS "Eigentumsform",
+                {eigentumsform_expr} AS "Eigentumsform",
                 CAST(y."Jahr" AS BIGINT) AS "Jahr",
                 SUM(g."Fläche") AS "Fläche"
             FROM gebaeude AS g
             CROSS JOIN (SELECT UNNEST(?) AS "Jahr") AS y
             WHERE (g."Betriebsaufnahme" IS NULL OR g."Betriebsaufnahme" <= y."Jahr")
               AND (g."Betriebsende"    IS NULL OR g."Betriebsende"    >= y."Jahr")
-            GROUP BY
-                CASE
-                    WHEN g."Eigentumsform" = 'Mietliegenschaften'
-                         AND g."Eigentümer" = 'Hochbauamt St. Gallen'
-                    THEN 'Eigenmiete'
-                    ELSE g."Eigentumsform"
-                END,
-                y."Jahr"
-            ORDER BY "Eigentumsform", y."Jahr"
+            GROUP BY 1, 2
+            ORDER BY 1, 2
             """,
-            [years],
+            params,
         ).fetchdf()
-        df.loc[df["Eigentumsform"] == "Eigenmiete", "Eigentumsform"] = "Eigentum Kanton St.Gallen - Miete temporär"
-        df.loc[df["Eigentumsform"] == "Mietliegenschaften", "Eigentumsform"] = "Eigentum Dritter - Miete temporär"
-        df.loc[df["Eigentumsform"] == "Nutzungsvereinbarung", "Eigentumsform"] = "Eigentum Kanton St.Gallen - langfristige Nutzung"
-        df.loc[df["Eigentumsform"] == "Stiftungs- und Drittliegenschaften", "Eigentumsform"] = "Eigentum Stiftungen - Miete temporär"
+        if rename_map:
+            df["Eigentumsform"] = df["Eigentumsform"].replace(rename_map)
         return df
 
 
@@ -310,13 +323,15 @@ def wide_results(df_sd: pd.DataFrame) -> pd.DataFrame:
     """
     with duckdb.connect(":memory:") as conn:
         conn.register("sd", df_sd)
-        result = conn.execute("""
+        result = conn.execute(
+            """
             PIVOT sd
             ON "Jahr"
             USING FIRST("Differenz_m2")
             GROUP BY "Nutzungsart"
             ORDER BY "Nutzungsart"
-        """).fetchdf()
+        """
+        ).fetchdf()
     result = result.set_index("Nutzungsart")
     # DuckDB PIVOT names pivot columns after their string representation;
     # convert back to integers to match the original pandas pivot_table output.
