@@ -505,6 +505,15 @@ _EIGENTUMSFORM_COLORS = {
 }
 
 
+# Stacking order of the bar chart, bottom to top
+_EIGENTUMSFORM_STACK_ORDER = [
+    "Eigentum Kanton St.Gallen - langfristige Nutzung",
+    "Eigentum Kanton St.Gallen - Miete temporär",
+    "Eigentum Stiftungen - Miete temporär",
+    "Eigentum Dritter - Miete temporär",
+]
+
+
 def _eigentumsform_color(eigentumsform: str, fallback_idx: int) -> Any:
     if eigentumsform in _EIGENTUMSFORM_COLORS:
         return _EIGENTUMSFORM_COLORS[eigentumsform]
@@ -526,7 +535,9 @@ def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     )
     pivot = pivot.reindex(columns=years, fill_value=0)
 
-    eigentumsformen = pivot.index.tolist()
+    # Stack order bottom -> top; unknown forms are appended on top
+    known = [e for e in _EIGENTUMSFORM_STACK_ORDER if e in pivot.index]
+    eigentumsformen = known + [e for e in pivot.index if e not in known]
     x = range(len(years))
 
     fig, ax = plt.subplots(figsize=(9, 5))
@@ -548,7 +559,11 @@ def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     ax.set_xticks(list(x))
     ax.set_xticklabels([str(y) for y in years])
     if eigentumsformen:
-        ax.legend(title="Eigentumsform", bbox_to_anchor=(1.01, 1), loc="upper left")
+        # Reverse so the legend order matches the visual stack (top entry = top segment)
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(
+            handles[::-1], labels[::-1], title="Eigentumsform", bbox_to_anchor=(1.01, 1), loc="upper left"
+        )
     ax.grid(True, alpha=0.3, axis="y")
     fig.tight_layout()
     return fig
