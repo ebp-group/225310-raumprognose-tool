@@ -282,7 +282,7 @@ def test_area_by_eigentumsform_maps_mietliegenschaften_hochbauamt_to_eigenmiete(
     result = area_by_eigentumsform(df, [2030])
     expected = pd.DataFrame(
         {
-            "Eigentumsform": ["Eigentum Kanton St.Gallen - Miete temporär", "Eigentum", "Eigentum Dritter - Miete temporär"],
+            "Eigentumsform": ["Eigentum Kanton St.Gallen - Miete", "Eigentum", "Eigentum Dritter - Miete"],
             "Jahr": [2030, 2030, 2030],
             "Fläche": [300.0, 50.0, 120.0],
         }
@@ -305,7 +305,7 @@ def test_area_by_eigentumsform_merges_eigenmiete_with_existing_eigenmiete() -> N
     result = area_by_eigentumsform(df, [2030])
     expected = pd.DataFrame(
         {
-            "Eigentumsform": ["Eigentum Kanton St.Gallen - Miete temporär"],
+            "Eigentumsform": ["Eigentum Kanton St.Gallen - Miete"],
             "Jahr": [2030],
             "Fläche": [400.0],
         }
