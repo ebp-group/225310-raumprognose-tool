@@ -500,18 +500,18 @@ def _create_surplus_deficit_charts(
 
 _EIGENTUMSFORM_COLORS = {
     "Eigentum Kanton St.Gallen - langfristige Nutzung": "#8cb48c",
-    "Eigentum Kanton St.Gallen - Miete temporär": "#bad1ba",
-    "Eigentum Dritter - Miete temporär": "#7aa2c0",
-    "Eigentum Stiftungen - Miete temporär": "#aec7d9",
+    "Eigentum Kanton St.Gallen - Miete": "#bad1ba",
+    "Eigentum Dritter - Miete": "#7aa2c0",
+    "Eigentum Stiftungen - Miete": "#aec7d9",
 }
 
 
 # Stacking order of the bar chart, bottom to top
 _EIGENTUMSFORM_STACK_ORDER = [
     "Eigentum Kanton St.Gallen - langfristige Nutzung",
-    "Eigentum Kanton St.Gallen - Miete temporär",
-    "Eigentum Stiftungen - Miete temporär",
-    "Eigentum Dritter - Miete temporär",
+    "Eigentum Kanton St.Gallen - Miete",
+    "Eigentum Stiftungen - Miete",
+    "Eigentum Dritter - Miete",
 ]
 
 

@@ -283,10 +283,10 @@ def area_by_eigentumsform(
             """,
             [years],
         ).fetchdf()
-        df.loc[df["Eigentumsform"] == "Eigenmiete", "Eigentumsform"] = "Eigentum Kanton St.Gallen - Miete temporär"
-        df.loc[df["Eigentumsform"] == "Mietliegenschaften", "Eigentumsform"] = "Eigentum Dritter - Miete temporär"
+        df.loc[df["Eigentumsform"] == "Eigenmiete", "Eigentumsform"] = "Eigentum Kanton St.Gallen - Miete"
+        df.loc[df["Eigentumsform"] == "Mietliegenschaften", "Eigentumsform"] = "Eigentum Dritter - Miete"
         df.loc[df["Eigentumsform"] == "Nutzungsvereinbarung", "Eigentumsform"] = "Eigentum Kanton St.Gallen - langfristige Nutzung"
-        df.loc[df["Eigentumsform"] == "Stiftungs- und Drittliegenschaften", "Eigentumsform"] = "Eigentum Stiftungen - Miete temporär"
+        df.loc[df["Eigentumsform"] == "Stiftungs- und Drittliegenschaften", "Eigentumsform"] = "Eigentum Stiftungen - Miete"
         return df
 
 
