@@ -258,6 +258,31 @@ def _df_to_datatable(
     )
 
 
+def _format_ergebnisse_table(df_sd_display: pd.DataFrame) -> pd.DataFrame:
+    """Format the "Vollständige Ergebnistabelle" columns for display.
+
+    Rounds ``Fläche`` and ``Bedarf_m2`` to whole m² first, then derives
+    ``Differenz_m2`` from those rounded values (rather than rounding the raw
+    Differenz independently), so the displayed Differenz always matches
+    Ist-Fläche - Bedarf. Returns a copy with renamed, string-formatted columns.
+    """
+    df = df_sd_display.copy()
+    flaeche_rounded = df["Fläche"].round(0)
+    bedarf_rounded = df["Bedarf_m2"].round(0)
+    df["Fläche"] = flaeche_rounded.map("{:,.0f}".format).str.replace(",", "'")
+    df["Bedarf_m2"] = bedarf_rounded.map("{:,.0f}".format).str.replace(",", "'")
+    df["Differenz_m2"] = (
+        (flaeche_rounded - bedarf_rounded).map("{:,.0f}".format).str.replace(",", "'")
+    )
+    return df.rename(
+        columns={
+            "Fläche": "Ist-Fläche (m²)",
+            "Bedarf_m2": "Bedarf (m²)",
+            "Differenz_m2": "Differenz (m²)",
+        }
+    )
+
+
 def _metric_card(label: str, value: Any, is_surplus: bool) -> ft.Card:
     """Build a compact metric display card."""
     formatted_value = _format_display_value(value)
@@ -1747,29 +1772,7 @@ def main(page: ft.Page) -> None:
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
 
-        df_sd_display_formatted = df_sd_display.copy()
-        df_sd_display_formatted["Fläche"] = (
-            df_sd_display_formatted["Fläche"]
-            .map("{:,.0f}".format)
-            .str.replace(",", "'")
-        )
-        df_sd_display_formatted["Bedarf_m2"] = (
-            df_sd_display_formatted["Bedarf_m2"]
-            .map("{:,.0f}".format)
-            .str.replace(",", "'")
-        )
-        df_sd_display_formatted["Differenz_m2"] = (
-            df_sd_display_formatted["Differenz_m2"]
-            .map("{:,.0f}".format)
-            .str.replace(",", "'")
-        )
-        df_sd_display_formatted = df_sd_display_formatted.rename(
-            columns={
-                "Fläche": "Ist-Fläche (m²)",
-                "Bedarf_m2": "Bedarf (m²)",
-                "Differenz_m2": "Differenz (m²)",
-            }
-        )
+        df_sd_display_formatted = _format_ergebnisse_table(df_sd_display)
 
         tab2 = ft.Column(
             [

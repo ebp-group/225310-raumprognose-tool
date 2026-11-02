@@ -3,7 +3,11 @@ import io
 import pandas as pd
 from openpyxl import load_workbook
 
-from app.flet_app import _build_excel_rounded, _largest_remainder_percentages
+from app.flet_app import (
+    _build_excel_rounded,
+    _format_ergebnisse_table,
+    _largest_remainder_percentages,
+)
 
 
 def _build_test_workbook():
@@ -114,6 +118,29 @@ def test_build_excel_rounded_differenz_matches_rounded_ist_minus_soll() -> None:
     assert sheet.cell(row=row, column=2).value == 2275
     assert sheet.cell(row=row, column=3).value == 2370
     assert sheet.cell(row=row, column=4).value == -95
+
+
+def test_format_ergebnisse_table_differenz_matches_rounded_ist_minus_soll() -> None:
+    """Differenz must equal rounded(Fläche) - rounded(Bedarf_m2), not round(raw Differenz).
+
+    Regression for the "Vollständige Ergebnistabelle": Fläche=2274.4,
+    Bedarf_m2=2372.4 round to 2274 and 2372 individually, but the raw
+    Differenz_m2=-98.0 would round the same either way here — use values where
+    independent rounding of Differenz actually diverges from the derived one.
+    """
+    df = pd.DataFrame(
+        {
+            "Nutzungsart": ["Bibliothek"],
+            "Jahr": [2025],
+            "Fläche": [2274.6],
+            "Bedarf_m2": [2372.4],
+            "Differenz_m2": [-97.8],
+        }
+    )
+    result = _format_ergebnisse_table(df)
+    assert result.loc[0, "Ist-Fläche (m²)"] == "2'275"
+    assert result.loc[0, "Bedarf (m²)"] == "2'372"
+    assert result.loc[0, "Differenz (m²)"] == "-97"
 
 
 def test_largest_remainder_percentages_sums_to_100() -> None:
