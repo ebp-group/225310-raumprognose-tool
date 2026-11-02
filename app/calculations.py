@@ -218,6 +218,12 @@ def area_by_eigentumsform(
     ``Eigentümer = 'Hochbauamt St. Gallen'`` are counted under the category
     ``'Eigenmiete'`` instead of ``'Mietliegenschaften'``.
 
+    ``'Nutzungsentschädigung'`` (the successor label for the abolished
+    ownership form previously tracked as ``'Eigentum Kanton St.Gallen -
+    Miete'``) is merged into the same display category as
+    ``'Nutzungsvereinbarung'``, i.e. ``'Eigentum Kanton St.Gallen -
+    langfristige Nutzung'``.
+
     Args:
         df_gebaeude: Buildings-and-rooms DataFrame with at least the columns
             ``Eigentumsform``, ``Eigentümer``, ``Fläche``, ``Betriebsaufnahme``,
@@ -286,8 +292,13 @@ def area_by_eigentumsform(
         df.loc[df["Eigentumsform"] == "Eigenmiete", "Eigentumsform"] = "Eigentum Kanton St.Gallen - Miete"
         df.loc[df["Eigentumsform"] == "Mietliegenschaften", "Eigentumsform"] = "Eigentum Dritter - Miete"
         df.loc[df["Eigentumsform"] == "Nutzungsvereinbarung", "Eigentumsform"] = "Eigentum Kanton St.Gallen - langfristige Nutzung"
+        df.loc[df["Eigentumsform"] == "Nutzungsentschädigung", "Eigentumsform"] = "Eigentum Kanton St.Gallen - langfristige Nutzung"
         df.loc[df["Eigentumsform"] == "Stiftungs- und Drittliegenschaften", "Eigentumsform"] = "Eigentum Stiftungen - Miete"
-        return df
+        return (
+            df.groupby(["Eigentumsform", "Jahr"], as_index=False, sort=False)["Fläche"]
+            .sum()
+            .reset_index(drop=True)
+        )
 
 
 def wide_results(df_sd: pd.DataFrame) -> pd.DataFrame:

@@ -311,3 +311,25 @@ def test_area_by_eigentumsform_merges_eigenmiete_with_existing_eigenmiete() -> N
         }
     )
     assert_frame_equal(result, expected)
+
+
+def test_area_by_eigentumsform_merges_nutzungsentschaedigung_with_nutzungsvereinbarung() -> None:
+    """'Nutzungsentschädigung' (successor of the abolished 'Miete' form) joins
+
+    'Nutzungsvereinbarung' under 'Eigentum Kanton St.Gallen - langfristige Nutzung'.
+    """
+    df = _make_gebaeude(
+        [
+            {"Eigentumsform": "Nutzungsvereinbarung", "Fläche": 200.0},
+            {"Eigentumsform": "Nutzungsentschädigung", "Fläche": 150.0},
+        ]
+    )
+    result = area_by_eigentumsform(df, [2030])
+    expected = pd.DataFrame(
+        {
+            "Eigentumsform": ["Eigentum Kanton St.Gallen - langfristige Nutzung"],
+            "Jahr": [2030],
+            "Fläche": [350.0],
+        }
+    )
+    assert_frame_equal(result, expected)

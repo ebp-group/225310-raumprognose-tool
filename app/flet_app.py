@@ -1190,7 +1190,7 @@ def main(page: ft.Page) -> None:
         "scenario": None,
         "ylimits": None,
         "custom_gebaeude": (
-            base_path / "260402_UniSG_Rauminventar_rev_260703.xlsx"
+            base_path / "260402_UniSG_Rauminventar_rev_261030.xlsx"
         ),  # TODO: default paths for testing only, remove later
         "custom_studierende": (
             base_path / "prognose_studierende_und_ma_B_260619.xlsx"

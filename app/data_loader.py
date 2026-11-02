@@ -18,6 +18,7 @@ _DATA_DIR = Path(__file__).parent.parent / "data"
 _GEBAEUDE_COLS = {"Eigentumsform", "Abgabeart", "Eigentümer", "Raumtyp EBP", "Fläche m²", "Betriebsaufnahme", "Betriebsende"}
 _STUDIERENDE_COLS = {"Jahr", "Anzahl", "Beschreibung", "Kategorie"}
 _NUTZUNGSFAKTOREN_COLS = {"szenario", "nutzungsart", "faktor_m2_pro_person", "schritt", "bezug"}
+_GEBAEUDE_SHEET = "261030_Rauminventar_IST_Uni"
 _FLAECHENPOTENZIAL_SHEET = "Flaechenpotenzial_UniSG"
 
 
@@ -58,7 +59,9 @@ def load_gebaeude_raeume(
     Raises:
         ValueError: If required columns are missing.
     """
-    df = pd.read_excel(source, engine="openpyxl", header=0, usecols="A:S")
+    df = pd.read_excel(
+        source, sheet_name=_GEBAEUDE_SHEET, engine="openpyxl", header=0, usecols="A:S"
+    )
     _validate_columns(df, _GEBAEUDE_COLS, os.path.basename(source))
     
     df = df.rename(columns={

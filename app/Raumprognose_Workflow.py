@@ -82,7 +82,7 @@ def _(
     )
     base_path = Path(os.environ.get("RAUMPROG_DATA_DIR", str(default_base_path)))
 
-    gebaeude_file = base_path / "260402_UniSG_Rauminventar_rev_260414.xlsx"
+    gebaeude_file = base_path / "260402_UniSG_Rauminventar_rev_261030.xlsx"
     studierende_file = base_path / "prognose_studierende_und_ma.xlsx"
     faktoren_file = base_path / "nutzungsfaktoren.xlsx"
 
