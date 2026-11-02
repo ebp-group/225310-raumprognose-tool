@@ -521,6 +521,26 @@ def _eigentumsform_color(eigentumsform: str, fallback_idx: int) -> Any:
     return plt.get_cmap("tab20")(fallback_idx % 20)
 
 
+def _largest_remainder_percentages(values: list[float], decimals: int = 1) -> list[str]:
+    """Round ``values`` (as shares of their total) to percentage strings that sum to 100%.
+
+    Rounding each share independently (e.g. matplotlib's ``autopct``) can make the
+    displayed percentages sum to 99.9% or 100.1%. This distributes the rounding
+    remainder (largest-remainder / Hamilton method) so the displayed values always
+    sum to exactly 100%.
+    """
+    scale = 10**decimals
+    total = sum(values)
+    raw_units = [v / total * scale * 100 for v in values]
+    floor_units = [int(u) for u in raw_units]
+    remainder = int(round(scale * 100)) - sum(floor_units)
+    order = sorted(range(len(values)), key=lambda i: raw_units[i] - floor_units[i], reverse=True)
+    units = list(floor_units)
+    for i in order[:remainder]:
+        units[i] += 1
+    return [f"{u / scale:.{decimals}f}%" for u in units]
+
+
 def _create_eigentumsform_chart(df_gebaeude: pd.DataFrame) -> plt.Figure:
     """Stacked bar chart of area by ownership type (Eigentumsform) over selected years."""
     years = [2025, 2026, 2030, 2040]
@@ -598,11 +618,12 @@ def _create_eigentumsform_pie_charts(
     for year in years:
         values = pivot[year]
         values = values[values > 0]
+        pct_labels = iter(_largest_remainder_percentages(list(values)))
         fig, ax = plt.subplots(figsize=(8, 5) if with_legend else (5, 5))
         ax.pie(
             values,
             colors=[colors[e] for e in values.index],
-            autopct="%1.1f%%",
+            autopct=lambda _pct: next(pct_labels),
             startangle=90,
             textprops={"fontsize": 16, "fontweight": "bold"},
             pctdistance=0.7,
@@ -843,10 +864,19 @@ def _build_excel_rounded(df_sd: pd.DataFrame, df_studierende: pd.DataFrame) -> b
         """Round *x* to the nearest multiple of 5."""
         return int(round(x / 5) * 5)
 
-    # Round numeric columns
+    # Round IST/SOLL to the nearest 5, then derive Differenz from the rounded
+    # values rather than rounding the raw Differenz independently — otherwise
+    # the displayed Differenz (and totals built from it) don't match
+    # IST - SOLL.
     df = df_sd.copy()
-    for col in ("Fläche", "Bedarf_m2", "Differenz_m2"):
+    for col in ("Fläche", "Bedarf_m2"):
         df[col] = df[col].apply(lambda v: _round5(v) if pd.notna(v) else None)
+    df["Differenz_m2"] = df.apply(
+        lambda r: r["Fläche"] - r["Bedarf_m2"]
+        if pd.notna(r["Fläche"]) and pd.notna(r["Bedarf_m2"])
+        else None,
+        axis=1,
+    )
 
     years = sorted(df["Jahr"].unique())
 

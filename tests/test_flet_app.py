@@ -3,7 +3,7 @@ import io
 import pandas as pd
 from openpyxl import load_workbook
 
-from app.flet_app import _build_excel_rounded
+from app.flet_app import _build_excel_rounded, _largest_remainder_percentages
 
 
 def _build_test_workbook():
@@ -83,3 +83,46 @@ def test_build_excel_rounded_appends_subtotal_and_headcount_rows() -> None:
 
     mitarbeitende_row = row_by_label["Anzahl Mitarbeitende"]
     assert sheet.cell(row=mitarbeitende_row, column=3).value == 50
+
+
+def test_build_excel_rounded_differenz_matches_rounded_ist_minus_soll() -> None:
+    """Differenz must equal rounded(IST) - rounded(SOLL), not round(raw Differenz).
+
+    Regression for a real export where Fläche=2274, Bedarf_m2=2372 (raw
+    Differenz_m2=-98) rounded to IST=2275, SOLL=2370, but Differenz showed -100
+    (round5(-98)) instead of the correct -95 (2275 - 2370).
+    """
+    df_sd = pd.DataFrame(
+        {
+            "Nutzungsart": ["Bibliothek"],
+            "Jahr": [2025],
+            "Fläche": [2274.0],
+            "Bedarf_m2": [2372.0],
+            "Differenz_m2": [-98.0],
+        }
+    )
+    df_studierende = pd.DataFrame(
+        {"Jahr": [2025], "Kategorie": ["Studierende"], "Anzahl": [100]}
+    )
+    workbook = load_workbook(
+        io.BytesIO(_build_excel_rounded(df_sd, df_studierende))
+    )
+    sheet = workbook["Gerundete Flächen"]
+    labels = [sheet.cell(row=r, column=1).value for r in range(1, sheet.max_row + 1)]
+    row = labels.index("Bibliothek") + 1
+
+    assert sheet.cell(row=row, column=2).value == 2275
+    assert sheet.cell(row=row, column=3).value == 2370
+    assert sheet.cell(row=row, column=4).value == -95
+
+
+def test_largest_remainder_percentages_sums_to_100() -> None:
+    # Naively rounding each share to 1 decimal gives 41.8 + 0.9 + 44.6 + 12.6 = 99.9.
+    result = _largest_remainder_percentages([41.8, 0.9, 44.6, 12.6])
+    assert result == ["41.8%", "0.9%", "44.7%", "12.6%"]
+    assert sum(float(p.rstrip("%")) for p in result) == 100.0
+
+
+def test_largest_remainder_percentages_preserves_order_and_exact_shares() -> None:
+    result = _largest_remainder_percentages([25.0, 25.0, 25.0, 25.0])
+    assert result == ["25.0%", "25.0%", "25.0%", "25.0%"]
